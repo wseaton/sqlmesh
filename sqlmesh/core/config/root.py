@@ -6,6 +6,7 @@ from sqlmesh.core import constants as c
 from sqlmesh.core._typing import NotificationTarget
 from sqlmesh.core.config.connection import ConnectionConfig, DuckDBConnectionConfig
 from sqlmesh.core.config.scheduler import BuiltInSchedulerConfig, SchedulerConfig
+from sqlmesh.core.loader import Loader, SqlMeshLoader
 from sqlmesh.core.user import User
 from sqlmesh.utils.errors import ConfigError
 from sqlmesh.utils.pydantic import PydanticModel
@@ -38,6 +39,7 @@ class Config(PydanticModel):
     ignore_patterns: t.List[str] = []
     time_column_format: str = c.DEFAULT_TIME_COLUMN_FORMAT
     users: t.List[User] = []
+    loader: Loader = SqlMeshLoader()
 
     def get_connection_config(self, name: t.Optional[str] = None) -> ConnectionConfig:
         if isinstance(self.connections, dict):

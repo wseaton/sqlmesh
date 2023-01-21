@@ -28,7 +28,6 @@ class Loader(abc.ABC):
         self._path_mtimes: t.Dict[Path, float] = {}
         self._dag: DAG[str] = DAG()
 
-    @abc.abstractmethod
     def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, DAG]:
         """
         Loads all macros and models in the context's path
@@ -38,6 +37,17 @@ class Loader(abc.ABC):
         Returns:
             A tuple containing a dict of loaded macros, adict of loaded models, and the dag
         """
+        self._context = context
+        self._path_mtimes.clear()
+        self._dag = DAG()
+
+        macros = self._load_macros()
+        models = self._load_models(macros)
+        for model in models.values():
+            self._add_model_to_dag(model)
+        c.update_model_schemas(self._context.dialect, self._dag, models)
+
+        return (macros, models, self._dag)
 
     def reload_needed(self) -> bool:
         """
@@ -52,6 +62,14 @@ class Loader(abc.ABC):
             for path, initial_mtime in self._path_mtimes.items()
         )
 
+    @abc.abstractmethod
+    def _load_macros(self) -> UniqueKeyDict:
+        """"""
+
+    @abc.abstractmethod
+    def _load_models(self, macros: UniqueKeyDict) -> UniqueKeyDict:
+        """"""
+
     def _add_model_to_dag(self, model: Model) -> None:
         self._dag.graph[model.name] = set()
         self._dag.add(model.name, model.depends_on)
@@ -60,20 +78,14 @@ class Loader(abc.ABC):
 class SqlMeshLoader(Loader):
     """Loads macros and models for a context using the SQLMesh file formats"""
 
-    def load(self, context: c.Context) -> t.Tuple[UniqueKeyDict, UniqueKeyDict, DAG]:
-        self._path_mtimes.clear()
-        self._dag = DAG()
-        macros = self._load_macros(context)
-        return (macros, self._load_models(context, macros), self._dag)
-
-    def _load_macros(self, context: c.Context) -> UniqueKeyDict:
+    def _load_macros(self) -> UniqueKeyDict:
         """Loads all of the macros within the macro directory"""
         # Store a copy of the macro registry
         standard_macros = macro.get_registry()
 
         # Import project python files so custom macros will be registered
-        for path in context.glob_path(context.macro_directory_path, ".py"):
-            if self._import_python_file(path.relative_to(context.path)):
+        for path in self._context.glob_path(self._context.macro_directory_path, ".py"):
+            if self._import_python_file(path.relative_to(self._context.path)):
                 self._path_mtimes[path] = path.stat().st_mtime
         macros = macro.get_registry()
 
@@ -82,32 +94,28 @@ class SqlMeshLoader(Loader):
 
         return macros
 
-    def _load_models(self, context: c.Context, macros: UniqueKeyDict) -> UniqueKeyDict:
+    def _load_models(self, macros: UniqueKeyDict) -> UniqueKeyDict:
         """
         Loads all of the models within the model directory with their associated
         audits into a Dict and creates the dag
         """
-        models = self._load_sql_models(context, macros)
-        models.update(self._load_python_models(context))
-        self._load_model_audits(context, models)
-
-        for model in models.values():
-            self._add_model_to_dag(model)
-        c.update_model_schemas(context.dialect, self._dag, models)
+        models = self._load_sql_models(macros)
+        models.update(self._load_python_models())
+        self._load_model_audits(models)
 
         return models
 
-    def _load_sql_models(
-        self, context: c.Context, macros: UniqueKeyDict
-    ) -> UniqueKeyDict:
+    def _load_sql_models(self, macros: UniqueKeyDict) -> UniqueKeyDict:
         """Loads the sql models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
-        for path in context.glob_path(context.models_directory_path, ".sql"):
+        for path in self._context.glob_path(
+            self._context.models_directory_path, ".sql"
+        ):
             self._path_mtimes[path] = path.stat().st_mtime
             with open(path, "r", encoding="utf-8") as file:
                 try:
                     expressions = parse_model(
-                        file.read(), default_dialect=context.dialect
+                        file.read(), default_dialect=self._context.dialect
                     )
                 except SqlglotError as ex:
                     raise ConfigError(
@@ -117,47 +125,51 @@ class SqlMeshLoader(Loader):
                     expressions,
                     macros=macros,
                     path=Path(path).absolute(),
-                    module_path=context.path,
-                    dialect=context.dialect,
-                    time_column_format=context.config.time_column_format,
+                    module_path=self._context.path,
+                    dialect=self._context.dialect,
+                    time_column_format=self._context.config.time_column_format,
                 )
                 models[model.name] = model
 
         return models
 
-    def _load_python_models(self, context: c.Context) -> UniqueKeyDict:
+    def _load_python_models(self) -> UniqueKeyDict:
         """Loads the python models into a Dict"""
         models: UniqueKeyDict = UniqueKeyDict("models")
         registry = model_registry.registry()
         registry.clear()
         registered: t.Set[str] = set()
 
-        for path in context.glob_path(context.models_directory_path, ".py"):
+        for path in self._context.glob_path(self._context.models_directory_path, ".py"):
             self._path_mtimes[path] = path.stat().st_mtime
-            if self._import_python_file(path.relative_to(context.path)):
+            if self._import_python_file(path.relative_to(self._context.path)):
                 self._path_mtimes[path] = path.stat().st_mtime
             new = registry.keys() - registered
             registered |= new
             for name in new:
                 model = registry[name].model(
                     path=path,
-                    module_path=context.path,
-                    time_column_format=context.config.time_column_format,
+                    module_path=self._context.path,
+                    time_column_format=self._context.config.time_column_format,
                 )
                 models[model.name] = model
 
         return models
 
-    def _load_model_audits(self, context: c.Context, models: UniqueKeyDict) -> None:
+    def _load_model_audits(self, models: UniqueKeyDict) -> None:
         """Loads all the model audits and adds them to the associated model"""
-        for path in context.glob_path(context.audits_directory_path, ".sql"):
+        for path in self._context.glob_path(
+            self._context.audits_directory_path, ".sql"
+        ):
             self._path_mtimes[path] = path.stat().st_mtime
             with open(path, "r", encoding="utf-8") as file:
-                expressions = parse_model(file.read(), default_dialect=context.dialect)
+                expressions = parse_model(
+                    file.read(), default_dialect=self._context.dialect
+                )
                 for audit in Audit.load_multiple(
                     expressions=expressions,
                     path=path,
-                    dialect=context.dialect,
+                    dialect=self._context.dialect,
                 ):
                     if not audit.skip:
                         if audit.model not in models:
