@@ -89,6 +89,9 @@ setup(
         "redshift": [
             "redshift_connector",
         ],
+        "trino": [
+            "trino",
+        ],
         "dbt": [
             "dbt-core",
         ],

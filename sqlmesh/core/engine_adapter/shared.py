@@ -5,6 +5,7 @@ from enum import Enum
 
 from pydantic import Field
 
+from sqlmesh.utils import nullsafe_join
 from sqlmesh.utils.pydantic import PydanticModel
 
 
@@ -53,3 +54,6 @@ class DataObject(PydanticModel):
     schema_name: str = Field(alias="schema")
     name: str
     type: DataObjectType
+
+    def __str__(self) -> str:
+        return nullsafe_join(".", self.catalog, self.schema_name, self.name)

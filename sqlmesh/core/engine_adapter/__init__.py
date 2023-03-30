@@ -13,6 +13,7 @@ from sqlmesh.core.engine_adapter.redshift import RedshiftEngineAdapter
 from sqlmesh.core.engine_adapter.shared import TransactionType
 from sqlmesh.core.engine_adapter.snowflake import SnowflakeEngineAdapter
 from sqlmesh.core.engine_adapter.spark import SparkEngineAdapter
+from sqlmesh.core.engine_adapter.trino import TrinoEngineAdapter
 
 DIALECT_TO_ENGINE_ADAPTER = {
     "spark": SparkEngineAdapter,
@@ -21,6 +22,7 @@ DIALECT_TO_ENGINE_ADAPTER = {
     "snowflake": SnowflakeEngineAdapter,
     "databricks": DatabricksSparkSessionEngineAdapter,
     "redshift": RedshiftEngineAdapter,
+    "trino": TrinoEngineAdapter,
     "postgres": EngineAdapterWithIndexSupport,
     "mysql": EngineAdapterWithIndexSupport,
     "mssql": EngineAdapterWithIndexSupport,

@@ -372,9 +372,16 @@ class EngineAdapter:
         )
 
     def drop_schema(
-        self, schema_name: str, ignore_if_not_exists: bool = True, cascade: bool = False
+        self,
+        schema_name: str,
+        catalog_name: t.Optional[str] = None,
+        ignore_if_not_exists: bool = True,
+        cascade: bool = False,
     ) -> None:
         """Drop a schema from a name or qualified table name."""
+        if not catalog_name:
+
+            raise ValueError("catalog_name is required for drop_schema")
         self.execute(
             exp.Drop(
                 this=exp.to_identifier(schema_name.split(".")[0]),
@@ -717,7 +724,7 @@ class EngineAdapter:
         to_sql_kwargs = (
             {"unsupported_level": ErrorLevel.IGNORE} if ignore_unsupported_errors else {}
         )
-        sql = self._to_sql(sql, **to_sql_kwargs) if isinstance(sql, exp.Expression) else sql
+        sql = self._to_sql(sql, **to_sql_kwargs)
         logger.debug(f"Executing SQL:\n{sql}")
         self.cursor.execute(sql, **kwargs)
 
@@ -729,17 +736,25 @@ class EngineAdapter:
     ) -> t.Optional[exp.Properties]:
         return None
 
-    def _to_sql(self, e: exp.Expression, **kwargs: t.Any) -> str:
+    def _to_sql(
+        self,
+        e: t.Union[exp.Expression, str],
+        ignore_unsupported_errors: bool = False,
+        **kwargs: t.Any,
+    ) -> str:
         """
         Converts an expression to a SQL string. Has a set of default kwargs to apply, and then default
         kwargs defined for the given dialect, and then kwargs provided by the user when defining the engine
         adapter, and then finally kwargs provided by the user when calling this method.
         """
+        if isinstance(e, str):
+            return e
         sql_gen_kwargs = {
             "dialect": self.dialect,
             "pretty": False,
             "comments": False,
             "identify": True,
+            "ignore_unsupported_errors": ignore_unsupported_errors,
             **self.DEFAULT_SQL_GEN_KWARGS,
             **self.sql_gen_kwargs,
             **kwargs,

@@ -441,6 +441,48 @@ class RedshiftConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class TrinoConnectionConfig(_ConnectionConfig):
+    concurrent_tasks: int = 4
+
+    host: str
+    port: int
+    user: str
+    password: t.Optional[str]
+    catalog: str
+    schema_name: t.Optional[str] = Field(alias="schema")
+
+    type_: Literal["trino"] = Field(alias="type", default="trino")
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        kwargs = {
+            "host",
+            "port",
+            "user",
+            "catalog",
+            "schema",
+        }
+        return kwargs
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.TrinoEngineAdapter
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from trino.dbapi import connect
+
+        return connect
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        from trino.auth import BasicAuthentication
+
+        return {
+            "auth": BasicAuthentication(self.user, self.password) if self.password else None,
+        }
+
+
 ConnectionConfig = Annotated[
     t.Union[
         DuckDBConnectionConfig,
@@ -450,6 +492,7 @@ ConnectionConfig = Annotated[
         DatabricksConnectionConfig,
         BigQueryConnectionConfig,
         RedshiftConnectionConfig,
+        TrinoConnectionConfig,
     ],
     Field(discriminator="type_"),
 ]
