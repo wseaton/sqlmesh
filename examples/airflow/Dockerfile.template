@@ -49,8 +49,8 @@ USER airflow
 
 # Install Spark provider for Airflow
 RUN pip install apache-airflow-providers-apache-spark \
-                apache-airflow-providers-databricks \
-                apache-airflow-providers-github
+                apache-airflow-providers-github \
+                apache-airflow-providers-snowflake[common.sql]
 
 # Install Deps
 USER root
@@ -58,5 +58,4 @@ ADD setup.py /opt/sqlmesh/setup.py
 RUN mkdir /opt/sqlmesh/sqlmesh
 RUN chown -R airflow /opt/sqlmesh
 USER airflow
-RUN cd /opt/sqlmesh && pip install -e .
-RUN pip install dbt-core
+RUN cd /opt/sqlmesh && pip install -e ".[snowflake,dbt]"

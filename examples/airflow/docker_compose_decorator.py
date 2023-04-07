@@ -111,6 +111,13 @@ for airflow_component in ["airflow-scheduler", "airflow-worker"]:
         environment_variables[
             "AIRFLOW_CONN_DATABRICKS_DEFAULT"
         ] = "databricks://${DATABRICKS_SERVER_HOSTNAME}?token=${DATABRICKS_TOKEN}&http_path=${DATABRICKS_HTTP_PATH}"
+    elif engine_operator == "snowflake":
+        snowflake_connection_info = os.environ.get("AIRFLOW_CONN_SNOWFLAKE_DEFAULT")
+        if not snowflake_connection_info:
+            raise RuntimeError(
+                "Tried to use Snowflake Airflow Engine operator but did not define `AIRFLOW_CONN_SNOWFLAKE_DEFAULT`"
+            )
+        environment_variables["AIRFLOW_CONN_SNOWFLAKE_DEFAULT"] = snowflake_connection_info
     if os.getenv("DEMO_GITHUB_PAT"):
         environment_variables[
             "AIRFLOW_CONN_GITHUB_DEFAULT"
