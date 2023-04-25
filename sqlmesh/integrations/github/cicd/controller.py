@@ -238,7 +238,7 @@ class GithubController:
         Updates the status of the merge commit.
         """
         self._repo.get_commit(self._pull_request.merge_commit_sha).create_status(
-            state=str(status), context=name
+            state=status.value, context=name
         )
 
     def update_required_approval_merge_commit_status(self, status: GithubCommitStatus) -> None:
