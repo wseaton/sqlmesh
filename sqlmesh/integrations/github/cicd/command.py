@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
     """Github Action CI/CD Bot"""
+    print("HERE")
     ctx.obj["github"] = GithubController(context=ctx.obj["context"], token=token)
 
 
@@ -80,6 +81,7 @@ def deploy_production(ctx: click.Context) -> None:
 @click.pass_context
 def run_all(ctx: click.Context) -> None:
     """Runs all the commands in the correct order."""
+    print("entered run all")
     controller = ctx.obj["github"]
     controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.PENDING)
     controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.PENDING)
