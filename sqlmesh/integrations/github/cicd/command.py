@@ -15,10 +15,15 @@ logger = logging.getLogger(__name__)
 
 
 @click.group()
+@click.option(
+    "--token",
+    help="The Github Token to be used. "
+    "Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions",
+)
 @click.pass_context
-def github(ctx: click.Context) -> None:
-    """Dumps information about the GitHub integration."""
-    ctx.obj["github"] = GithubController(ctx.obj["context"])
+def github(ctx: click.Context, token: str) -> None:
+    """Github Action CI/CD Bot"""
+    ctx.obj["github"] = GithubController(context=ctx.obj["context"], token=token)
 
 
 def _check_required_approvers(controller: GithubController) -> None:

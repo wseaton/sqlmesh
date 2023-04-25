@@ -80,12 +80,14 @@ class GithubEvent:
 class GithubEnvironmentConfig:
     GITHUB_EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
     GITHUB_API_URL = os.environ["GITHUB_API_URL"]
-    GITHUB_TOKEN = os.environ["GITHUB_TOKEN"]
 
 
 class GithubController:
-    def __init__(self, context: Context, event: GithubEvent = GithubEvent.from_env()) -> None:
+    def __init__(
+        self, context: Context, token: str, event: GithubEvent = GithubEvent.from_env()
+    ) -> None:
         self.context = context
+        self.token = token
         self.event = event
         self.__client: t.Optional[Github] = None
         self.__repo: t.Optional[Repository] = None
@@ -98,7 +100,7 @@ class GithubController:
         if not self.__client:
             self.__client = Github(
                 base_url=GithubEnvironmentConfig.GITHUB_API_URL,
-                login_or_token=GithubEnvironmentConfig.GITHUB_TOKEN,
+                login_or_token=self.token,
             )
         return self.__client
 
