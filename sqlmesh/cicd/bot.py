@@ -28,6 +28,7 @@ def bot(
             config=config,
         )
     }
+    print("finished slqmesh bot")
 
 
 bot.add_command(github)
