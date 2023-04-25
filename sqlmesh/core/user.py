@@ -35,7 +35,7 @@ class User(PydanticModel):
 
     @property
     def is_required_approver(self) -> bool:
-        """Indicates if this is a gatekeeper for PR approvals."""
+        """Indicates if this is a required approver for PR approvals."""
         return UserRole.REQUIRED_APPROVER in self.roles
 
     @property
