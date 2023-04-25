@@ -8,7 +8,7 @@ from sqlmesh.integrations.github.cicd.controller import (
     GithubCommitStatus,
     GithubController,
 )
-from sqlmesh.utils.errors import MissingARequiredApprover, PlanError
+from sqlmesh.utils.errors import PlanError
 
 logger = logging.getLogger(__name__)
 
@@ -27,12 +27,13 @@ def github(ctx: click.Context, token: str) -> None:
     ctx.obj["github"] = GithubController(context=ctx.obj["context"], token=token)
 
 
-def _check_required_approvers(controller: GithubController) -> None:
+def _check_required_approvers(controller: GithubController) -> bool:
     controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.PENDING)
-    if not controller.has_required_approval:
-        controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.FAILURE)
-        raise MissingARequiredApprover()
-    controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.SUCCESS)
+    if controller.has_required_approval:
+        controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.SUCCESS)
+        return True
+    controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.FAILURE)
+    return False
 
 
 @github.command()
@@ -42,15 +43,16 @@ def check_required_approvers(ctx: click.Context) -> None:
     _check_required_approvers(ctx.obj["github"])
 
 
-def _update_pr_environment(controller: GithubController) -> None:
+def _update_pr_environment(controller: GithubController) -> bool:
     controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.PENDING)
     try:
         controller.update_pr_environment()
         controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.SUCCESS)
-    except PlanError as e:
+        return True
+    except PlanError:
         controller.post_pr_has_uncategorized_changes()
         controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
-        raise e
+        return False
 
 
 @github.command()
@@ -60,15 +62,16 @@ def update_pr_environment(ctx: click.Context) -> None:
     _update_pr_environment(ctx.obj["github"])
 
 
-def _deploy_production(controller: GithubController) -> None:
+def _deploy_production(controller: GithubController) -> bool:
     controller.update_prod_environment_merge_commit_status(status=GithubCommitStatus.PENDING)
     try:
         controller.deploy_to_prod()
         controller.update_prod_environment_merge_commit_status(status=GithubCommitStatus.SUCCESS)
-    except PlanError as e:
+        return True
+    except PlanError:
         controller.post_pr_has_uncategorized_changes()
         controller.update_prod_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
-        raise e
+        return False
 
 
 @github.command()
@@ -87,6 +90,24 @@ def run_all(ctx: click.Context) -> None:
     controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.PENDING)
     controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.PENDING)
     controller.update_prod_environment_merge_commit_status(status=GithubCommitStatus.PENDING)
-    _check_required_approvers(controller)
-    _update_pr_environment(controller)
+    try:
+        if not _update_pr_environment(controller):
+            controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
+            controller.update_prod_environment_merge_commit_status(
+                status=GithubCommitStatus.FAILURE
+            )
+            return
+    except Exception as e:
+        controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
+        controller.update_prod_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
+        raise e
+    try:
+        if not _check_required_approvers(controller):
+            controller.update_prod_environment_merge_commit_status(
+                status=GithubCommitStatus.FAILURE
+            )
+            return
+    except Exception as e:
+        controller.update_prod_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
+        raise e
     _deploy_production(controller)
