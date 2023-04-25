@@ -21,6 +21,7 @@ def bot(
     config: t.Optional[str] = None,
 ) -> None:
     """SQLMesh CI/CD Bot."""
+    print("In sqlmesh bot")
     ctx.obj = {
         "context": Context(
             paths=paths,
@@ -29,7 +30,9 @@ def bot(
     }
 
 
+bot.add_command(github)
+
+
 if __name__ == "__main__":
     print("I'm in main")
-    bot.add_command(github)
     bot()
