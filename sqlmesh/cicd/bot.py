@@ -29,8 +29,7 @@ def bot(
     }
 
 
-bot.add_command(github)
-
-
 if __name__ == "__main__":
+    print("I'm in main")
+    bot.add_command(github)
     bot()

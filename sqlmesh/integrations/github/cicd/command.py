@@ -13,11 +13,12 @@ from sqlmesh.utils.errors import MissingARequiredApprover, PlanError
 logger = logging.getLogger(__name__)
 
 
-@click.group()
+@click.group(no_args_is_help=True)
 @click.option(
+    "-t",
     "--token",
-    help="The Github Token to be used. "
-    "Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions",
+    type=str,
+    help="The Github Token to be used. Pass in `${{ secrets.GITHUB_TOKEN }}` if you want to use the one created by Github actions",
 )
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
