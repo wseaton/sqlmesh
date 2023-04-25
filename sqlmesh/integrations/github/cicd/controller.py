@@ -97,6 +97,8 @@ class GithubController:
 
     @property
     def _client(self) -> Github:
+        from github import Github
+
         if not self.__client:
             self.__client = Github(
                 base_url=GithubEnvironmentConfig.GITHUB_API_URL,
