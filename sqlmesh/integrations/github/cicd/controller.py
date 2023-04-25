@@ -138,8 +138,8 @@ class GithubController:
         return self.__approvers
 
     @property
-    def _required_approvers(self) -> t.Set[User]:
-        return {user for user in self.context.config.users if user.is_required_approver}
+    def _required_approvers(self) -> t.List[User]:
+        return [user for user in self.context.config.users if user.is_required_approver]
 
     @property
     def pr_environment_name(self) -> str:
