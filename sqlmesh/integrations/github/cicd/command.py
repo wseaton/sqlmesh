@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import logging
-import sys
 
 import click
 
@@ -49,8 +48,7 @@ def _update_pr_environment(controller: GithubController) -> None:
     except PlanError as e:
         controller.post_pr_has_uncategorized_changes()
         controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
-        logger.warning(e)
-        sys.exit(1)
+        raise e
 
 
 @github.command()
@@ -68,8 +66,7 @@ def _deploy_production(controller: GithubController) -> None:
     except PlanError as e:
         controller.post_pr_has_uncategorized_changes()
         controller.update_prod_environment_merge_commit_status(status=GithubCommitStatus.FAILURE)
-        logger.warning(e)
-        sys.exit(1)
+        raise e
 
 
 @github.command()
