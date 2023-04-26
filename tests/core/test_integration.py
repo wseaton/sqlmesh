@@ -627,13 +627,15 @@ def test_auto_categorization(sushi_context: Context):
 @pytest.mark.integration
 @pytest.mark.core_integration
 def test_multi(mocker):
-    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"])
+    context = Context(paths=["examples/multi/repo_1", "examples/multi/repo_2"], connection="memory")
     context.state_sync.reset()
     plan = context.plan()
     assert len(plan.new_snapshots) == 4
     context.apply(plan)
 
-    context = Context(paths=["examples/multi/repo_1"])
+    context = Context(
+        paths=["examples/multi/repo_1"], connection="memory", engine_adapter=context.engine_adapter
+    )
     model = context.models["bronze.a"]
     model.query.select("'c' AS c", copy=False)
     plan = context.plan()
