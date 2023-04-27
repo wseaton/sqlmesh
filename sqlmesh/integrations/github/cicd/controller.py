@@ -316,13 +316,13 @@ class GithubController:
         if name in self._check_run_mapping:
             check_run = self._check_run_mapping[name]
             print("check run updating")
-            print(json.dumps(kwargs))
+            print(json.dumps(kwargs, indent=4, sort_keys=True, default=str))
             check_run.edit(
                 **{k: v for k, v in kwargs.items() if k not in ("name", "head_sha", "started_at")}
             )
         else:
             print("check run creating")
-            print(json.dumps(kwargs))
+            print(json.dumps(kwargs, indent=4, sort_keys=True, default=str))
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
     def update_required_approval_merge_commit_status(
