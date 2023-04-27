@@ -69,7 +69,7 @@ class GithubEvent:
 
     @classmethod
     def from_env(cls) -> GithubEvent:
-        return cls.from_path(GithubEnvironmentConfig.GITHUB_EVENT_PATH)
+        return cls.from_path(GithubEnvironmentConfig.EVENT_PATH)
 
     @property
     def is_review(self) -> bool:
@@ -103,8 +103,9 @@ class GithubEvent:
 
 
 class GithubEnvironmentConfig:
-    GITHUB_EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
-    GITHUB_API_URL = os.environ["GITHUB_API_URL"]
+    EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
+    API_URL = os.environ["GITHUB_API_URL"]
+    SHA = os.environ["GITHUB_SHA"]
 
 
 class GithubController:
@@ -135,7 +136,7 @@ class GithubController:
                 notification_targets=[
                     GithubNotificationTarget(
                         token=self._token,
-                        github_url=GithubEnvironmentConfig.GITHUB_API_URL,
+                        github_url=GithubEnvironmentConfig.API_URL,
                         pull_request_url=self._event.pull_request_url,
                     )
                 ],
@@ -148,7 +149,7 @@ class GithubController:
 
         if not self.__client:
             self.__client = Github(
-                base_url=GithubEnvironmentConfig.GITHUB_API_URL,
+                base_url=GithubEnvironmentConfig.API_URL,
                 login_or_token=self._token,
             )
         return self.__client
@@ -285,6 +286,7 @@ class GithubController:
         name: str,
         status: GithubCommitStatus,
         conclusion: t.Optional[GithubCommitConclusion] = None,
+        output_title: t.Optional[str] = None,
     ) -> None:
         """
         Updates the status of the merge commit.
@@ -292,7 +294,7 @@ class GithubController:
         current_time = datetime.datetime.now(datetime.timezone.utc)
         kwargs: t.Dict[str, t.Any] = {
             "name": name,
-            "head_sha": self._pull_request.merge_commit_sha,
+            "head_sha": GithubEnvironmentConfig.SHA,
             "status": status.value,
         }
         if status.is_in_progress:
@@ -301,11 +303,8 @@ class GithubController:
             kwargs["completed_at"] = current_time
         if conclusion:
             kwargs["conclusion"] = conclusion.value
-        kwargs.update(
-            {
-                "output": {"title": "title", "summary": "summary", "text": "text"},
-            }
-        )
+        if output_title:
+            kwargs.update({"output": {"title": output_title, "summary": output_title}})
         self._repo.create_check_run(**kwargs)
 
     def update_required_approval_merge_commit_status(
@@ -325,7 +324,10 @@ class GithubController:
         Updates the status of the merge commit for the PR environment.
         """
         self._update_merge_commit_status(
-            name="SQLMesh - PR Environment Synced", status=status, conclusion=conclusion
+            name="SQLMesh - PR Environment Synced",
+            status=status,
+            conclusion=conclusion,
+            output_title=self.pr_environment_name,
         )
 
     def update_prod_environment_merge_commit_status(
