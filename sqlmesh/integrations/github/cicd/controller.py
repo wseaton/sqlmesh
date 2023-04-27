@@ -54,6 +54,7 @@ class GithubCommitConclusion(str, Enum):
     CANCELLED = "cancelled"
     TIMED_OUT = "timed_out"
     ACTION_REQUIRED = "action_required"
+    SKIPPED = "skipped"
 
 
 class GithubEvent:
@@ -307,23 +308,35 @@ class GithubController:
         )
         self._repo.create_check_run(**kwargs)
 
-    def update_required_approval_merge_commit_status(self, status: GithubCommitStatus) -> None:
+    def update_required_approval_merge_commit_status(
+        self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
+    ) -> None:
         """
         Updates the status of the merge commit for the required approval.
         """
-        self._update_merge_commit_status(name="SQLMesh - Has Required Approval", status=status)
+        self._update_merge_commit_status(
+            name="SQLMesh - Has Required Approval", status=status, conclusion=conclusion
+        )
 
-    def update_pr_environment_merge_commit_status(self, status: GithubCommitStatus) -> None:
+    def update_pr_environment_merge_commit_status(
+        self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
+    ) -> None:
         """
         Updates the status of the merge commit for the PR environment.
         """
-        self._update_merge_commit_status(name="SQLMesh - PR Environment Synced", status=status)
+        self._update_merge_commit_status(
+            name="SQLMesh - PR Environment Synced", status=status, conclusion=conclusion
+        )
 
-    def update_prod_environment_merge_commit_status(self, status: GithubCommitStatus) -> None:
+    def update_prod_environment_merge_commit_status(
+        self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
+    ) -> None:
         """
         Updates the status of the merge commit for the prod environment.
         """
-        self._update_merge_commit_status(name="SQLMesh - Prod Environment Synced", status=status)
+        self._update_merge_commit_status(
+            name="SQLMesh - Prod Environment Synced", status=status, conclusion=conclusion
+        )
 
     def merge_pr(self) -> None:
         """
