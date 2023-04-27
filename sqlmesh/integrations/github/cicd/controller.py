@@ -20,6 +20,7 @@ from sqlmesh.utils.errors import CICDBotError
 
 if t.TYPE_CHECKING:
     from github import Github
+    from github.CheckRun import CheckRun
     from github.PullRequest import PullRequest
     from github.PullRequestReview import PullRequestReview
     from github.Repository import Repository
@@ -124,6 +125,7 @@ class GithubController:
         self._config = config
         self._token = token
         self._event = event
+        self._check_run_mapping: t.Dict[str, CheckRun] = {}
         self.__client: t.Optional[Github] = None
         self.__repo: t.Optional[Repository] = None
         self.__pull_request: t.Optional[PullRequest] = None
@@ -309,7 +311,11 @@ class GithubController:
             kwargs["conclusion"] = conclusion.value
         if output_title:
             kwargs.update({"output": {"title": output_title, "summary": output_title}})
-        self._repo.create_check_run(**kwargs)
+        if name in self._check_run_mapping:
+            check_run = self._check_run_mapping[name]
+            check_run.edit(**kwargs)
+        else:
+            self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
     def update_required_approval_merge_commit_status(
         self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
