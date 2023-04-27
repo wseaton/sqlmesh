@@ -302,7 +302,7 @@ class GithubController:
         current_time = datetime.datetime.now(datetime.timezone.utc)
         kwargs: t.Dict[str, t.Any] = {
             "name": name,
-            "head_sha": GithubEnvironmentConfig.SHA,
+            "head_sha": self._pull_request.head.sha,
             "status": status.value,
         }
         if status.is_in_progress:
