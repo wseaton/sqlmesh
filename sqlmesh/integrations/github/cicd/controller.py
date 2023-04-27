@@ -297,6 +297,8 @@ class GithubController:
         """
         Updates the status of the merge commit.
         """
+        import json
+
         current_time = datetime.datetime.now(datetime.timezone.utc)
         kwargs: t.Dict[str, t.Any] = {
             "name": name,
@@ -313,8 +315,14 @@ class GithubController:
             kwargs.update({"output": {"title": output_title, "summary": output_title}})
         if name in self._check_run_mapping:
             check_run = self._check_run_mapping[name]
-            check_run.edit(**kwargs)
+            print("check run updating")
+            print(json.dumps(kwargs))
+            check_run.edit(
+                **{k: v for k, v in kwargs.items() if k not in ("name", "head_sha", "started_at")}
+            )
         else:
+            print("check run creating")
+            print(json.dumps(kwargs))
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
     def update_required_approval_merge_commit_status(
