@@ -58,6 +58,10 @@ class GithubCommitConclusion(str, Enum):
 
 
 class GithubEvent:
+    """
+    Takes a Github Actions event payload and provides a simple interface to access
+    """
+
     def __init__(self, payload: t.Dict[str, t.Any]) -> None:
         self.payload = payload
         self._pull_request_info: t.Optional[PullRequestInfo] = None
