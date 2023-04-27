@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import datetime
 import json
 import logging
 import os
@@ -29,10 +30,30 @@ logger = logging.getLogger(__name__)
 
 
 class GithubCommitStatus(str, Enum):
-    PENDING = "pending"
+    QUEUED = "queued"
+    IN_PROGRESS = "in_progress"
+    COMPLETED = "completed"
+
+    @property
+    def is_queued(self) -> bool:
+        return self == GithubCommitStatus.QUEUED
+
+    @property
+    def is_in_progress(self) -> bool:
+        return self == GithubCommitStatus.IN_PROGRESS
+
+    @property
+    def is_completed(self) -> bool:
+        return self == GithubCommitStatus.COMPLETED
+
+
+class GithubCommitConclusion(str, Enum):
     SUCCESS = "success"
     FAILURE = "failure"
-    ERROR = "error"
+    NEUTRAL = "neutral"
+    CANCELLED = "cancelled"
+    TIMED_OUT = "timed_out"
+    ACTION_REQUIRED = "action_required"
 
 
 class GithubEvent:
@@ -258,36 +279,51 @@ class GithubController:
             )
         return
 
-    def _update_merge_commit_status(self, name: str, status: GithubCommitStatus) -> None:
+    def _update_merge_commit_status(
+        self,
+        name: str,
+        status: GithubCommitStatus,
+        conclusion: t.Optional[GithubCommitConclusion] = None,
+    ) -> None:
         """
         Updates the status of the merge commit.
         """
-        self._repo.create_check_run(
-            name="Ryan Testing",
-            head_sha=self._pull_request.merge_commit_sha,
-            status="in_progress",
+        current_time = datetime.datetime.now(datetime.timezone.utc).isoformat()
+        kwargs: t.Dict[str, t.Any] = {
+            "name": name,
+            "head_sha": self._pull_request.merge_commit_sha,
+            "status": status.value,
+        }
+        if status.is_in_progress:
+            kwargs["started_at"] = current_time
+        if status.is_completed:
+            kwargs["completed_at"] = current_time
+        if conclusion:
+            kwargs["conclusion"] = conclusion.value
+        kwargs.update(
+            {
+                "output": {"title": "title", "summary": "summary", "text": "text"},
+            }
         )
-        self._repo.get_commit(self._pull_request.merge_commit_sha).create_status(
-            state=status.value, context=name
-        )
+        self._repo.create_check_run(**kwargs)
 
     def update_required_approval_merge_commit_status(self, status: GithubCommitStatus) -> None:
         """
         Updates the status of the merge commit for the required approval.
         """
-        self._update_merge_commit_status(name="Has Required Approval", status=status)
+        self._update_merge_commit_status(name="SQLMesh - Has Required Approval", status=status)
 
     def update_pr_environment_merge_commit_status(self, status: GithubCommitStatus) -> None:
         """
         Updates the status of the merge commit for the PR environment.
         """
-        self._update_merge_commit_status(name="PR Environment Synced", status=status)
+        self._update_merge_commit_status(name="SQLMesh - PR Environment Synced", status=status)
 
     def update_prod_environment_merge_commit_status(self, status: GithubCommitStatus) -> None:
         """
         Updates the status of the merge commit for the prod environment.
         """
-        self._update_merge_commit_status(name="Prod Environment Synced", status=status)
+        self._update_merge_commit_status(name="SQLMesh - Prod Environment Synced", status=status)
 
     def merge_pr(self) -> None:
         """
