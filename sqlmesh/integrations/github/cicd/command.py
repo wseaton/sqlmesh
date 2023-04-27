@@ -23,8 +23,11 @@ logger = logging.getLogger(__name__)
 @click.pass_context
 def github(ctx: click.Context, token: str) -> None:
     """Github Action CI/CD Bot"""
-    print("HERE")
-    ctx.obj["github"] = GithubController(context=ctx.obj["context"], token=token)
+    ctx.obj["github"] = GithubController(
+        paths=ctx.obj["paths"],
+        token=token,
+        config=ctx.obj["config"],
+    )
 
 
 def _check_required_approvers(controller: GithubController) -> bool:
@@ -39,7 +42,7 @@ def _check_required_approvers(controller: GithubController) -> bool:
 @github.command()
 @click.pass_context
 def check_required_approvers(ctx: click.Context) -> None:
-    """Dumps information about the GitHub integration."""
+    """Checks if a required approver has provided approval on the PR."""
     _check_required_approvers(ctx.obj["github"])
 
 
@@ -85,7 +88,6 @@ def deploy_production(ctx: click.Context) -> None:
 @click.pass_context
 def run_all(ctx: click.Context) -> None:
     """Runs all the commands in the correct order."""
-    print("entered run all")
     controller = ctx.obj["github"]
     controller.update_required_approval_merge_commit_status(status=GithubCommitStatus.PENDING)
     controller.update_pr_environment_merge_commit_status(status=GithubCommitStatus.PENDING)

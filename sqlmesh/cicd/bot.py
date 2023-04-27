@@ -6,7 +6,6 @@ import click
 
 from sqlmesh.cli import error_handler
 from sqlmesh.cli import options as opt
-from sqlmesh.core.context import Context
 from sqlmesh.integrations.github.cicd.command import github
 
 
@@ -21,19 +20,14 @@ def bot(
     config: t.Optional[str] = None,
 ) -> None:
     """SQLMesh CI/CD Bot."""
-    print("In sqlmesh bot")
     ctx.obj = {
-        "context": Context(
-            paths=paths,
-            config=config,
-        )
+        "paths": paths,
+        "config": config,
     }
-    print("finished slqmesh bot")
 
 
 bot.add_command(github)
 
 
 if __name__ == "__main__":
-    print("I'm in main")
     bot()

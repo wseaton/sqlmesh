@@ -13,6 +13,7 @@ from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
 from sqlmesh.core.notification_target import NotificationStatus
 from sqlmesh.core.user import User
+from sqlmesh.integrations.github.notification_target import GithubNotificationTarget
 from sqlmesh.integrations.github.shared import PullRequestInfo, add_comment_to_pr
 from sqlmesh.utils.errors import CICDBotError
 
@@ -21,6 +22,8 @@ if t.TYPE_CHECKING:
     from github.PullRequest import PullRequest
     from github.PullRequestReview import PullRequestReview
     from github.Repository import Repository
+
+    from sqlmesh.core.config import Config
 
 logger = logging.getLogger(__name__)
 
@@ -84,16 +87,38 @@ class GithubEnvironmentConfig:
 
 class GithubController:
     def __init__(
-        self, context: Context, token: str, event: GithubEvent = GithubEvent.from_env()
+        self,
+        paths: t.Union[str, t.Iterable[str]],
+        token: str,
+        config: t.Optional[t.Union[Config, str]] = None,
+        event: GithubEvent = GithubEvent.from_env(),
     ) -> None:
-        self.context = context
-        self.token = token
-        self.event = event
+        self._paths = paths
+        self._config = config
+        self._token = token
+        self._event = event
         self.__client: t.Optional[Github] = None
         self.__repo: t.Optional[Repository] = None
         self.__pull_request: t.Optional[PullRequest] = None
         self.__reviews: t.Optional[t.Iterable[PullRequestReview]] = None
         self.__approvers: t.Optional[t.Set[str]] = None
+        self.__context: t.Optional[Context] = None
+
+    @property
+    def _context(self) -> Context:
+        if not self.__context:
+            self.__context = Context(
+                paths=self._paths,
+                config=self._config,
+                notification_targets=[
+                    GithubNotificationTarget(
+                        token=self._token,
+                        github_url=GithubEnvironmentConfig.GITHUB_API_URL,
+                        pull_request_url=self._event.pull_request_url,
+                    )
+                ],
+            )
+        return self.__context
 
     @property
     def _client(self) -> Github:
@@ -102,7 +127,7 @@ class GithubController:
         if not self.__client:
             self.__client = Github(
                 base_url=GithubEnvironmentConfig.GITHUB_API_URL,
-                login_or_token=self.token,
+                login_or_token=self._token,
             )
         return self.__client
 
@@ -110,14 +135,14 @@ class GithubController:
     def _repo(self) -> Repository:
         if not self.__repo:
             self.__repo = self._client.get_repo(
-                self.event.pull_request_info.full_repo_path, lazy=True
+                self._event.pull_request_info.full_repo_path, lazy=True
             )
         return self.__repo
 
     @property
     def _pull_request(self) -> PullRequest:
         if not self.__pull_request:
-            self.__pull_request = self._repo.get_pull(self.event.pull_request_info.pr_number)
+            self.__pull_request = self._repo.get_pull(self._event.pull_request_info.pr_number)
         return self.__pull_request
 
     @property
@@ -139,15 +164,15 @@ class GithubController:
 
     @property
     def _required_approvers(self) -> t.List[User]:
-        return [user for user in self.context.config.users if user.is_required_approver]
+        return [user for user in self._context.config.users if user.is_required_approver]
 
     @property
     def pr_environment_name(self) -> str:
         return Environment.normalize_name(
             "_".join(
                 [
-                    self.event.pull_request_info.repo,
-                    str(self.event.pull_request_info.pr_number),
+                    self._event.pull_request_info.repo,
+                    str(self._event.pull_request_info.pr_number),
                 ]
             )
         )
@@ -178,7 +203,7 @@ class GithubController:
         Comment on the pull request with the provided comment. It checks if the bot has already commented on the PR
         and if so then it updates the comment instead of creating a new one.
         """
-        bot_users = [user for user in self.context.config.users if user.is_bot]
+        bot_users = [user for user in self._context.config.users if user.is_bot]
         user_to_append_to = bot_users[0] if bot_users else None
         if user_to_append_to:
             logger.debug(f"Found user to append to: {user_to_append_to.github_username}")
@@ -186,7 +211,7 @@ class GithubController:
             logger.debug("No user to append to found")
         add_comment_to_pr(
             repo=self._repo,
-            pull_request_info=self.event.pull_request_info,
+            pull_request_info=self._event.pull_request_info,
             notification_status=notification_status,
             msg=comment,
             user_to_append_to=user_to_append_to,
@@ -206,7 +231,7 @@ class GithubController:
         Creates a PR environment from the logic present in the PR. If the PR contains changes that are
         uncategorized, then an error will be raised.
         """
-        self.context.plan(
+        self._context.plan(
             environment=self.pr_environment_name,
             skip_backfill=True,
             auto_apply=True,
@@ -217,16 +242,16 @@ class GithubController:
         """
         Attempts to deploy a plan to prod. If the plan is not up-to-date or has gaps then it will raise.
         """
-        self.context.plan(c.PROD, auto_apply=True, no_gaps=True, no_prompts=True)
+        self._context.plan(c.PROD, auto_apply=True, no_gaps=True, no_prompts=True)
 
     def delete_pr_environment(self) -> None:
         """
         Deletes all the schemas for a given environment by checking all the schemas used by models.
         """
-        schemas = {parse_model_name(model.name)[1] for model in self.context.models.values()}
+        schemas = {parse_model_name(model.name)[1] for model in self._context.models.values()}
         for schema in schemas:
             assert schema
-            self.context.engine_adapter.drop_schema(
+            self._context.engine_adapter.drop_schema(
                 schema_name="__".join([schema, self.pr_environment_name]),
                 ignore_if_not_exists=True,
                 cascade=True,
