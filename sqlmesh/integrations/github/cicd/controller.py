@@ -262,6 +262,11 @@ class GithubController:
         """
         Updates the status of the merge commit.
         """
+        self._repo.create_check_run(
+            name="Ryan Testing",
+            head_sha=self._pull_request.merge_commit_sha,
+            status="in_progress",
+        )
         self._repo.get_commit(self._pull_request.merge_commit_sha).create_status(
             state=status.value, context=name
         )
