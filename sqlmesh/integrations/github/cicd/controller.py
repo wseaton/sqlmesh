@@ -261,7 +261,7 @@ class GithubController:
         already exists in the comment then it will replace the value if replace_if_exists is True, otherwise it will
         not update the comment.
         """
-        comment_header = "*SQLMesh Bot Info*"
+        comment_header = "**SQLMesh Bot Info**"
         comment = seq_get(
             [comment for comment in self._issue.get_comments() if comment_header in comment.body],
             0,
@@ -271,7 +271,7 @@ class GithubController:
         if key in comment.body and replace_if_exists:
             comment.edit(re.sub(f":{key_emoji}: {key}:.*", f"{key}: {value}", comment.body))
         elif key not in comment.body:
-            comment.edit(f"{comment.body}\n:{key_emoji} {key}: {value}")
+            comment.edit(f"{comment.body}\n:{key_emoji}: {key}: {value}")
 
     def update_pr_environment(self) -> None:
         """
