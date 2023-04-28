@@ -8,15 +8,10 @@ class UserRole(str, Enum):
     """A role to associate the user with"""
 
     REQUIRED_APPROVER = "required_approver"
-    BOT = "bot"
 
     @property
     def is_required_approver(self) -> bool:
         return self == UserRole.REQUIRED_APPROVER
-
-    @property
-    def is_bot(self) -> bool:
-        return self == UserRole.BOT
 
 
 class User(PydanticModel):
@@ -37,8 +32,3 @@ class User(PydanticModel):
     def is_required_approver(self) -> bool:
         """Indicates if this is a required approver for PR approvals."""
         return UserRole.REQUIRED_APPROVER in self.roles
-
-    @property
-    def is_bot(self) -> bool:
-        """Indicates if this is a CI/CD bot account. There should only be one of these per project"""
-        return UserRole.BOT in self.roles

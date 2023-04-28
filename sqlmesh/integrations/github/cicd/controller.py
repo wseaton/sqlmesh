@@ -5,22 +5,24 @@ import json
 import logging
 import os
 import pathlib
+import re
 import typing as t
 from enum import Enum
+
+from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
-from sqlmesh.core.notification_target import NotificationStatus
 from sqlmesh.core.user import User
-from sqlmesh.integrations.github.notification_target import GithubNotificationTarget
-from sqlmesh.integrations.github.shared import PullRequestInfo, add_comment_to_pr
+from sqlmesh.integrations.github.shared import PullRequestInfo
 from sqlmesh.utils.errors import CICDBotError
 
 if t.TYPE_CHECKING:
     from github import Github
     from github.CheckRun import CheckRun
+    from github.Issue import Issue
     from github.PullRequest import PullRequest
     from github.PullRequestReview import PullRequestReview
     from github.Repository import Repository
@@ -56,6 +58,34 @@ class GithubCommitConclusion(str, Enum):
     TIMED_OUT = "timed_out"
     ACTION_REQUIRED = "action_required"
     SKIPPED = "skipped"
+
+    @property
+    def is_success(self) -> bool:
+        return self == GithubCommitConclusion.SUCCESS
+
+    @property
+    def is_failure(self) -> bool:
+        return self == GithubCommitConclusion.FAILURE
+
+    @property
+    def is_neutral(self) -> bool:
+        return self == GithubCommitConclusion.NEUTRAL
+
+    @property
+    def is_cancelled(self) -> bool:
+        return self == GithubCommitConclusion.CANCELLED
+
+    @property
+    def is_timed_out(self) -> bool:
+        return self == GithubCommitConclusion.TIMED_OUT
+
+    @property
+    def is_action_required(self) -> bool:
+        return self == GithubCommitConclusion.ACTION_REQUIRED
+
+    @property
+    def is_skipped(self) -> bool:
+        return self == GithubCommitConclusion.SKIPPED
 
 
 class GithubEvent:
@@ -128,6 +158,7 @@ class GithubController:
         self.__client: t.Optional[Github] = None
         self.__repo: t.Optional[Repository] = None
         self.__pull_request: t.Optional[PullRequest] = None
+        self.__issue: t.Optional[Issue] = None
         self.__reviews: t.Optional[t.Iterable[PullRequestReview]] = None
         self.__approvers: t.Optional[t.Set[str]] = None
         self.__context: t.Optional[Context] = None
@@ -138,13 +169,6 @@ class GithubController:
             self.__context = Context(
                 paths=self._paths,
                 config=self._config,
-                notification_targets=[
-                    GithubNotificationTarget(
-                        token=self._token,
-                        github_url=GithubEnvironmentConfig.API_URL,
-                        pull_request_url=self._event.pull_request_url,
-                    )
-                ],
             )
         return self.__context
 
@@ -172,6 +196,12 @@ class GithubController:
         if not self.__pull_request:
             self.__pull_request = self._repo.get_pull(self._event.pull_request_info.pr_number)
         return self.__pull_request
+
+    @property
+    def _issue(self) -> Issue:
+        if not self.__issue:
+            self.__issue = self._repo.get_issue(self._event.pull_request_info.pr_number)
+        return self.__issue
 
     @property
     def _reviews(self) -> t.Iterable[PullRequestReview]:
@@ -222,35 +252,26 @@ class GithubController:
             return True
         return bool(self._required_approvers_with_approval)
 
-    def post_notification_to_pr(
-        self, notification_status: NotificationStatus, comment: str
+    def update_sqlmesh_comment_info(
+        self, lookup_key: str, value: str, replace_if_exists: bool = False
     ) -> None:
         """
-        Comment on the pull request with the provided comment. It checks if the bot has already commented on the PR
-        and if so then it updates the comment instead of creating a new one.
+        Update the SQLMesh PR Comment for the given lookup key with the given value. If a comment does not exist then
+        it creates one. It determines the comment to update by looking for a comment with the header. If the lookup key
+        already exists in the comment then it will replace the value if replace_if_exists is True, otherwise it will
+        not update the comment.
         """
-        bot_users = [user for user in self._context.config.users if user.is_bot]
-        user_to_append_to = bot_users[0] if bot_users else None
-        if user_to_append_to:
-            logger.debug(f"Found user to append to: {user_to_append_to.github_username}")
-        else:
-            logger.debug("No user to append to found")
-        add_comment_to_pr(
-            repo=self._repo,
-            pull_request_info=self._event.pull_request_info,
-            notification_status=notification_status,
-            msg=comment,
-            user_to_append_to=user_to_append_to,
+        comment_header = ":information_source: SQLMesh Bot Info :information_source:"
+        comment = seq_get(
+            [comment for comment in self._issue.get_comments() if comment_header in comment.body],
+            0,
         )
-
-    def post_pr_has_uncategorized_changes(self) -> None:
-        """
-        Post a comment on the PR that there are uncategorized changes.
-        """
-        self.post_notification_to_pr(
-            notification_status=NotificationStatus.FAILURE,
-            comment="The plan for this PR is not up to date. Please run `sqlmesh plan` and commit the changes.",
-        )
+        if not comment:
+            comment = self._issue.create_comment(comment_header)
+        if lookup_key in comment.body and replace_if_exists:
+            comment.edit(re.sub(f"{lookup_key}:.*", f"{lookup_key}: {value}", comment.body))
+        elif lookup_key not in comment.body:
+            comment.edit(f"{comment.body}\n{lookup_key}: {value}")
 
     def update_pr_environment(self) -> None:
         """
@@ -262,13 +283,16 @@ class GithubController:
             skip_backfill=True,
             auto_apply=True,
             no_prompts=True,
+            no_auto_categorization=True,
         )
 
     def deploy_to_prod(self) -> None:
         """
         Attempts to deploy a plan to prod. If the plan is not up-to-date or has gaps then it will raise.
         """
-        self._context.plan(c.PROD, auto_apply=True, no_gaps=True, no_prompts=True)
+        self._context.plan(
+            c.PROD, auto_apply=True, no_gaps=True, no_prompts=True, no_auto_categorization=True
+        )
 
     def delete_pr_environment(self) -> None:
         """
@@ -284,7 +308,7 @@ class GithubController:
             )
         return
 
-    def _update_merge_commit_status(
+    def _update_check(
         self,
         name: str,
         status: GithubCommitStatus,
@@ -299,6 +323,8 @@ class GithubController:
         current_time = datetime.datetime.now(datetime.timezone.utc)
         kwargs: t.Dict[str, t.Any] = {
             "name": name,
+            # Note: The environment variable `GITHUB_SHA` would be the merge commit so that is why instead we
+            # get the last commit on the PR.
             "head_sha": self._pull_request.head.sha,
             "status": status.value,
         }
@@ -319,7 +345,7 @@ class GithubController:
         else:
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
-    def update_required_approval_merge_commit_status(
+    def update_required_approval_check(
         self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
     ) -> None:
         """
@@ -337,7 +363,7 @@ class GithubController:
             }
             title = conclusion_to_title.get(conclusion, "Need a Required Approval")
         summary = f"List of possible required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers])}"
-        self._update_merge_commit_status(
+        self._update_check(
             name="SQLMesh - Has Required Approval",
             status=status,
             conclusion=conclusion,
@@ -345,7 +371,7 @@ class GithubController:
             summary=summary,
         )
 
-    def update_pr_environment_merge_commit_status(
+    def update_pr_environment_check(
         self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
     ) -> None:
         """
@@ -362,15 +388,21 @@ class GithubController:
             status,
             f"Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
         )
-        self._update_merge_commit_status(
+        self._update_check(
             name="SQLMesh - PR Environment Synced",
             status=status,
             conclusion=conclusion,
             title=title,
             summary=summary,
         )
+        if conclusion and conclusion.is_success:
+            self.update_sqlmesh_comment_info(
+                lookup_key=":eye: PR Virtual Data Environment :eye:",
+                value=self.pr_environment_name,
+                replace_if_exists=False,
+            )
 
-    def update_prod_environment_merge_commit_status(
+    def update_prod_environment_check(
         self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
     ) -> None:
         """
@@ -387,7 +419,7 @@ class GithubController:
                 GithubCommitConclusion.SUCCESS: "Deployed to Prod",
             }
             title = conclusion_to_title.get(conclusion, "Failed to deploy to prod")
-        self._update_merge_commit_status(
+        self._update_check(
             name="SQLMesh - Prod Environment Synced",
             status=status,
             conclusion=conclusion,
