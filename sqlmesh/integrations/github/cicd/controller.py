@@ -334,9 +334,7 @@ class GithubController:
             kwargs["completed_at"] = current_time
         if conclusion:
             kwargs["conclusion"] = conclusion.value
-        kwargs["output"] = {"title": title}
-        if summary:
-            kwargs["output"]["summary"] = summary
+        kwargs["output"] = {"title": title, "summary": summary or title}
         if name in self._check_run_mapping:
             check_run = self._check_run_mapping[name]
             check_run.edit(
