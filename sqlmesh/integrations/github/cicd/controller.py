@@ -253,7 +253,7 @@ class GithubController:
         return bool(self._required_approvers_with_approval)
 
     def update_sqlmesh_comment_info(
-        self, lookup_key: str, value: str, replace_if_exists: bool = False
+        self, key: str, value: str, key_emoji: str, replace_if_exists: bool = False
     ) -> None:
         """
         Update the SQLMesh PR Comment for the given lookup key with the given value. If a comment does not exist then
@@ -261,17 +261,17 @@ class GithubController:
         already exists in the comment then it will replace the value if replace_if_exists is True, otherwise it will
         not update the comment.
         """
-        comment_header = ":information_source: SQLMesh Bot Info :information_source:"
+        comment_header = "*SQLMesh Bot Info*"
         comment = seq_get(
             [comment for comment in self._issue.get_comments() if comment_header in comment.body],
             0,
         )
         if not comment:
             comment = self._issue.create_comment(comment_header)
-        if lookup_key in comment.body and replace_if_exists:
-            comment.edit(re.sub(f"{lookup_key}:.*", f"{lookup_key}: {value}", comment.body))
-        elif lookup_key not in comment.body:
-            comment.edit(f"{comment.body}\n{lookup_key}: {value}")
+        if key in comment.body and replace_if_exists:
+            comment.edit(re.sub(f":{key_emoji}: {key}:.*", f"{key}: {value}", comment.body))
+        elif key not in comment.body:
+            comment.edit(f"{comment.body}\n:{key_emoji} {key}: {value}")
 
     def update_pr_environment(self) -> None:
         """
@@ -395,8 +395,9 @@ class GithubController:
         )
         if conclusion and conclusion.is_success:
             self.update_sqlmesh_comment_info(
-                lookup_key=":eye: PR Virtual Data Environment :eye:",
-                value=self.pr_environment_name,
+                key="PR Virtual Data Environment",
+                value=f"`{self.pr_environment_name}`",
+                key_emoji="eyes",
                 replace_if_exists=False,
             )
 
