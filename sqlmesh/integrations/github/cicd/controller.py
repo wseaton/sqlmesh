@@ -110,7 +110,6 @@ class GithubEvent:
 class GithubEnvironmentConfig:
     EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
     API_URL = os.environ["GITHUB_API_URL"]
-    SHA = os.environ["GITHUB_SHA"]
 
 
 class GithubController:
@@ -196,6 +195,12 @@ class GithubController:
         return [user for user in self._context.config.users if user.is_required_approver]
 
     @property
+    def _required_approvers_with_approval(self) -> t.List[User]:
+        return [
+            user for user in self._required_approvers if user.github_username in self._approvers
+        ]
+
+    @property
     def pr_environment_name(self) -> str:
         return Environment.normalize_name(
             "_".join(
@@ -215,15 +220,7 @@ class GithubController:
         """
         if len(self._required_approvers) == 0:
             return True
-        if len(self._approvers) == 0:
-            return False
-        return bool(
-            [
-                approver
-                for approver in self._approvers
-                if approver in {x.github_username for x in self._required_approvers}
-            ]
-        )
+        return bool(self._required_approvers_with_approval)
 
     def post_notification_to_pr(
         self, notification_status: NotificationStatus, comment: str
@@ -291,13 +288,13 @@ class GithubController:
         self,
         name: str,
         status: GithubCommitStatus,
+        title: str,
         conclusion: t.Optional[GithubCommitConclusion] = None,
-        output_title: t.Optional[str] = None,
+        summary: t.Optional[str] = None,
     ) -> None:
         """
         Updates the status of the merge commit.
         """
-        import json
 
         current_time = datetime.datetime.now(datetime.timezone.utc)
         kwargs: t.Dict[str, t.Any] = {
@@ -311,18 +308,15 @@ class GithubController:
             kwargs["completed_at"] = current_time
         if conclusion:
             kwargs["conclusion"] = conclusion.value
-        if output_title:
-            kwargs.update({"output": {"title": output_title, "summary": output_title}})
+        kwargs["output"] = {"title": title}
+        if summary:
+            kwargs["output"]["summary"] = summary
         if name in self._check_run_mapping:
             check_run = self._check_run_mapping[name]
-            print("check run updating")
-            print(json.dumps(kwargs, indent=4, sort_keys=True, default=str))
             check_run.edit(
                 **{k: v for k, v in kwargs.items() if k not in ("name", "head_sha", "started_at")}
             )
         else:
-            print("check run creating")
-            print(json.dumps(kwargs, indent=4, sort_keys=True, default=str))
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
     def update_required_approval_merge_commit_status(
@@ -331,8 +325,24 @@ class GithubController:
         """
         Updates the status of the merge commit for the required approval.
         """
+        status_to_title = {
+            GithubCommitStatus.IN_PROGRESS: "Checking if we have required Approvers",
+            GithubCommitStatus.QUEUED: "Waiting to Check if we have required Approvers",
+        }
+        title = status_to_title.get(status)
+        if not title:
+            assert conclusion
+            conclusion_to_title = {
+                GithubCommitConclusion.SUCCESS: f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}",
+            }
+            title = conclusion_to_title.get(conclusion, "Need a Required Approval")
+        summary = f"List of possible required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers])}"
         self._update_merge_commit_status(
-            name="SQLMesh - Has Required Approval", status=status, conclusion=conclusion
+            name="SQLMesh - Has Required Approval",
+            status=status,
+            conclusion=conclusion,
+            title=t.cast(str, title),
+            summary=summary,
         )
 
     def update_pr_environment_merge_commit_status(
@@ -341,11 +351,23 @@ class GithubController:
         """
         Updates the status of the merge commit for the PR environment.
         """
+        title = self.pr_environment_name
+        status_to_summary = {
+            GithubCommitStatus.QUEUED: f"Waiting to create or update PR Environment `{self.pr_environment_name}`",
+            GithubCommitStatus.IN_PROGRESS: f"Creating or Updating PR Environment `{self.pr_environment_name}`",
+            GithubCommitConclusion.SUCCESS: f"Created or Updated PR Environment `{self.pr_environment_name}`",
+            GithubCommitConclusion.SKIPPED: f"Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
+        }
+        summary = status_to_summary.get(
+            status,
+            f"Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+        )
         self._update_merge_commit_status(
             name="SQLMesh - PR Environment Synced",
             status=status,
             conclusion=conclusion,
-            output_title=self.pr_environment_name,
+            title=title,
+            summary=summary,
         )
 
     def update_prod_environment_merge_commit_status(
@@ -354,8 +376,22 @@ class GithubController:
         """
         Updates the status of the merge commit for the prod environment.
         """
+        status_to_title = {
+            GithubCommitStatus.IN_PROGRESS: "Deploying to Prod",
+            GithubCommitStatus.QUEUED: "Waiting to see if we can deploy to prod",
+        }
+        title = status_to_title.get(status)
+        if not title:
+            assert conclusion
+            conclusion_to_title = {
+                GithubCommitConclusion.SUCCESS: "Deployed to Prod",
+            }
+            title = conclusion_to_title.get(conclusion, "Failed to deploy to prod")
         self._update_merge_commit_status(
-            name="SQLMesh - Prod Environment Synced", status=status, conclusion=conclusion
+            name="SQLMesh - Prod Environment Synced",
+            status=status,
+            conclusion=conclusion,
+            title=t.cast(str, title),
         )
 
     def merge_pr(self) -> None:
