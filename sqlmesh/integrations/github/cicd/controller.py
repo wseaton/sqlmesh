@@ -466,7 +466,8 @@ class GithubController:
             summary += (
                 f"Model: {affected_model.model_name} - {affected_model.change_category.value}\n"
             )
-            summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
+            if affected_model.intervals:
+                summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
         self._update_check(
             name="SQLMesh - PR Environment Synced",
             status=status,
