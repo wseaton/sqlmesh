@@ -449,37 +449,55 @@ class GithubController:
         """
         Updates the status of the merge commit for the PR environment.
         """
-        title = self.pr_environment_name
+        title = f"Target Virtual Data Environment: `{self.pr_environment_name}`"
         status_to_summary = {
-            GithubCommitStatus.QUEUED: f"Waiting to create or update PR Environment `{self.pr_environment_name}`",
-            GithubCommitStatus.IN_PROGRESS: f"Creating or Updating PR Environment `{self.pr_environment_name}`",
-            GithubCommitConclusion.SUCCESS: f"Created or Updated PR Environment `{self.pr_environment_name}`",
-            GithubCommitConclusion.SKIPPED: f"Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
+            GithubCommitStatus.QUEUED: f":pause_button: Waiting to create or update PR Environment `{self.pr_environment_name}`",
+            GithubCommitStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",
         }
-        summary = status_to_summary.get(
-            status,
-            f"Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
-        )
-        summary_header = "PR Environment Summary"
-        for affected_model in self.get_pr_affected_models():
-            summary += f"\n\n{summary_header}\n"
-            summary += (
-                f"Model: {affected_model.model_name} - {affected_model.change_category.value}\n"
+        summary = status_to_summary.get(status)
+        if summary:
+            self._update_check(
+                name="SQLMesh - PR Environment Synced",
+                status=status,
+                conclusion=conclusion,
+                title=title,
+                summary=summary,
             )
-            if affected_model.intervals:
-                summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
-        self._update_check(
-            name="SQLMesh - PR Environment Synced",
-            status=status,
-            conclusion=conclusion,
-            title=title,
-            summary=summary,
-        )
-        if conclusion and conclusion.is_success:
+            return
+        assert conclusion
+        if conclusion.is_success:
+            summary = f"**PR Environment Summary**\n"
+            for affected_model in self.get_pr_affected_models():
+                summary += f"Model: `{affected_model.model_name}` - `{affected_model.change_category.user_facing_value}`\n"
+                if affected_model.intervals:
+                    summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
+            self._update_check(
+                name="SQLMesh - PR Environment Synced",
+                status=status,
+                conclusion=conclusion,
+                title=title,
+                summary=summary,
+            )
             self.update_sqlmesh_comment_info(
                 value=f":eyes: PR Virtual Data Environment: `{self.pr_environment_name}`",
                 find_regex=r":eyes: PR Virtual Data Environment: `.*`",
                 replace_if_exists=False,
+            )
+        else:
+            conclusion_to_summary = {
+                GithubCommitConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
+                GithubCommitConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
+                GithubCommitConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
+            }
+            summary = conclusion_to_summary.get(
+                conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
+            )
+            self._update_check(
+                name="SQLMesh - PR Environment Synced",
+                status=status,
+                conclusion=conclusion,
+                title=title,
+                summary=summary,
             )
 
     def update_prod_environment_check(
@@ -496,9 +514,14 @@ class GithubController:
         if not title:
             assert conclusion
             conclusion_to_title = {
-                GithubCommitConclusion.SUCCESS: "Deployed to Prod",
+                GithubCommitConclusion.SUCCESS: ":ship: Deployed to Prod",
+                GithubCommitConclusion.CANCELLED: ":stop_sign: Cancelled deploying to prod",
+                GithubCommitConclusion.SKIPPED: ":next_track_button: Skipped deploying to prod since dependencies were not met",
+                GithubCommitConclusion.FAILURE: ":x: Failed to deploy to prod",
             }
-            title = conclusion_to_title.get(conclusion, "Failed to deploy to prod")
+            title = conclusion_to_title.get(
+                conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
+            )
         self._update_check(
             name="SQLMesh - Prod Environment Synced",
             status=status,
