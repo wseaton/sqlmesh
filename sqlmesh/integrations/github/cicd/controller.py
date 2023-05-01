@@ -366,7 +366,8 @@ class GithubController:
         )
         modified_snapshots = []
         for snapshot in plan.directly_modified:
-            assert snapshot.change_category
+            if not snapshot.change_category:
+                continue
             if snapshot.change_category.is_breaking or snapshot.change_category.is_non_breaking:
                 modified_snapshots.append(AffectedEnvironmentModel.from_snapshot(snapshot))
                 for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
