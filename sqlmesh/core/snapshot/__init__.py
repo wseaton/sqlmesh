@@ -13,6 +13,7 @@ from sqlmesh.core.snapshot.definition import (
     SnapshotNameVersionLike,
     SnapshotTableInfo,
     fingerprint_from_model,
+    format_and_merge_intervals,
     merge_intervals,
     table_name,
     to_table_mapping,

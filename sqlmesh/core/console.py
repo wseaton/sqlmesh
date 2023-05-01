@@ -757,7 +757,32 @@ class NotebookMagicConsole(TerminalConsole):
             self.display(widgets.VBox(children=[test_info, error_output], layout={"width": "100%"}))
 
 
-class DatabricksMagicConsole(TerminalConsole):
+class CaptureTerminalConsole(TerminalConsole):
+    """
+    Captures the output of the terminal console so that it can be extracted out and displayed within other interfaces.
+    The captured output is cleared out after it is retrieved.
+
+    Note: `_prompt` and `_confirm` need to also be overriden to work with the custom interface if you want to use
+    this console interactively.
+    """
+
+    def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
+        super().__init__(console=console, **kwargs)
+        self._captured_output = ""
+
+    @property
+    def captured_output(self) -> str:
+        output = self._captured_output
+        self._captured_output = ""
+        return output
+
+    def _print(self, value: t.Any, **kwargs: t.Any) -> None:
+        with self.console.capture() as capture:
+            self.console.print(value, **kwargs)
+        self._captured_output = capture.get()
+
+
+class DatabricksMagicConsole(CaptureTerminalConsole):
     """
     Note: Databricks Magic Console currently does not support progress bars while a plan is being applied. The
     NotebookMagicConsole does support progress bars, but they will time out after 5 minutes of execution
@@ -765,10 +790,8 @@ class DatabricksMagicConsole(TerminalConsole):
     """
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
-        with self.console.capture() as capture:
-            self.console.print(value, **kwargs)
-        output = capture.get()
-        print(output)
+        super()._print(value, **kwargs)
+        print(self.captured_output)
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
         self._print(message)

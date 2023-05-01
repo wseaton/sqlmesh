@@ -12,12 +12,20 @@ from enum import Enum
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
+from sqlmesh.core.console import CaptureTerminalConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
+from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.snapshot.definition import (
+    Intervals,
+    SnapshotChangeCategory,
+    format_and_merge_intervals,
+)
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.shared import PullRequestInfo
 from sqlmesh.utils.errors import CICDBotError
+from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
     from github import Github
@@ -28,6 +36,7 @@ if t.TYPE_CHECKING:
     from github.Repository import Repository
 
     from sqlmesh.core.config import Config
+    from sqlmesh.core.snapshot import Snapshot
 
 logger = logging.getLogger(__name__)
 
@@ -86,6 +95,29 @@ class GithubCommitConclusion(str, Enum):
     @property
     def is_skipped(self) -> bool:
         return self == GithubCommitConclusion.SKIPPED
+
+
+class AffectedEnvironmentModel(PydanticModel):
+    model_name: str
+    view_name: str
+    intervals: Intervals
+    change_category: SnapshotChangeCategory
+    interval_unit: t.Optional[IntervalUnit]
+
+    @classmethod
+    def from_snapshot(
+        cls, snapshot: Snapshot, use_dev_intervals: bool = False
+    ) -> AffectedEnvironmentModel:
+        return cls(
+            model_name=snapshot.model.name,
+            view_name=snapshot.model.view_name,
+            intervals=snapshot.dev_intervals if use_dev_intervals else snapshot.intervals,
+            change_category=snapshot.change_category,
+        )
+
+    @property
+    def formatted_loaded_intervals(self) -> str:
+        return format_and_merge_intervals(self.intervals, self.interval_unit)
 
 
 class GithubEvent:
@@ -253,7 +285,7 @@ class GithubController:
         return bool(self._required_approvers_with_approval)
 
     def update_sqlmesh_comment_info(
-        self, key: str, value: str, key_emoji: str, replace_if_exists: bool = False
+        self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
     ) -> None:
         """
         Update the SQLMesh PR Comment for the given lookup key with the given value. If a comment does not exist then
@@ -268,10 +300,12 @@ class GithubController:
         )
         if not comment:
             comment = self._issue.create_comment(comment_header)
-        if key in comment.body and replace_if_exists:
-            comment.edit(re.sub(f":{key_emoji}: {key}:.*", f"{key}: {value}", comment.body))
-        elif key not in comment.body:
-            comment.edit(f"{comment.body}\n:{key_emoji}: {key}: {value}")
+        existing_value = seq_get(re.findall(find_regex, comment.body), 0) if find_regex else None
+        if existing_value:
+            if replace_if_exists:
+                comment.edit(re.sub(t.cast(str, find_regex), value, comment.body))
+        else:
+            comment.edit(f"{comment.body}\n{value}")
 
     def update_pr_environment(self) -> None:
         """
@@ -290,9 +324,27 @@ class GithubController:
         """
         Attempts to deploy a plan to prod. If the plan is not up-to-date or has gaps then it will raise.
         """
-        self._context.plan(
-            c.PROD, auto_apply=True, no_gaps=True, no_prompts=True, no_auto_categorization=True
+        plan = self._context.plan(
+            c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
         )
+        console = CaptureTerminalConsole()
+        console.show_model_difference_summary(plan.context_diff, detailed=True)
+        model_difference_summary = console.captured_output
+        console._show_missing_dates(plan)
+        missing_dates = console.captured_output
+        plan_summary = f"""<details>
+  <summary>Plan Summary</summary>
+
+{model_difference_summary}
+{missing_dates}
+</details>
+
+"""
+        self.update_sqlmesh_comment_info(
+            value=plan_summary,
+            find_regex=None,
+        )
+        plan.apply()
 
     def delete_pr_environment(self) -> None:
         """
@@ -307,6 +359,27 @@ class GithubController:
                 cascade=True,
             )
         return
+
+    def get_pr_affected_models(self) -> t.List[AffectedEnvironmentModel]:
+        plan = self._context.plan(
+            c.PROD, auto_apply=False, no_gaps=False, no_prompts=True, no_auto_categorization=True
+        )
+        modified_snapshots = []
+        for snapshot in plan.directly_modified:
+            assert snapshot.change_category
+            if snapshot.change_category.is_breaking or snapshot.change_category.is_non_breaking:
+                modified_snapshots.append(AffectedEnvironmentModel.from_snapshot(snapshot))
+                for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
+                    modified_snapshots.append(
+                        AffectedEnvironmentModel.from_snapshot(
+                            plan.context_diff.snapshots[downstream_indirect]
+                        )
+                    )
+            else:
+                modified_snapshots.append(
+                    AffectedEnvironmentModel.from_snapshot(snapshot, use_dev_intervals=True)
+                )
+        return modified_snapshots
 
     def _update_check(
         self,
@@ -386,6 +459,13 @@ class GithubController:
             status,
             f"Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
         )
+        summary_header = "PR Environment Summary"
+        for affected_model in self.get_pr_affected_models():
+            summary += f"\n\n{summary_header}\n"
+            summary += (
+                f"Model: {affected_model.model_name} - {affected_model.change_category.value}\n"
+            )
+            summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
         self._update_check(
             name="SQLMesh - PR Environment Synced",
             status=status,
@@ -395,9 +475,8 @@ class GithubController:
         )
         if conclusion and conclusion.is_success:
             self.update_sqlmesh_comment_info(
-                key="PR Virtual Data Environment",
-                value=f"`{self.pr_environment_name}`",
-                key_emoji="eyes",
+                value=f":eyes: PR Virtual Data Environment: `{self.pr_environment_name}`",
+                find_regex=r":eyes: PR Virtual Data Environment: `.*`",
                 replace_if_exists=False,
             )
 

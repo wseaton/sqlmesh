@@ -19,14 +19,16 @@ from sqlmesh.core.model import (
     kind,
     parse_model_name,
 )
-from sqlmesh.core.model.meta import HookCall
+from sqlmesh.core.model.meta import HookCall, IntervalUnit
 from sqlmesh.utils.date import (
     TimeLike,
     is_date,
+    make_inclusive,
     make_inclusive_end,
     now,
     now_timestamp,
     to_datetime,
+    to_ds,
     to_timestamp,
 )
 from sqlmesh.utils.errors import SQLMeshError
@@ -52,6 +54,30 @@ class SnapshotChangeCategory(IntEnum):
     FORWARD_ONLY = 3
     INDIRECT_BREAKING = 4
     INDIRECT_FORWARD_ONLY = 5
+
+    @property
+    def is_breaking(self) -> bool:
+        return self == self.BREAKING
+
+    @property
+    def is_non_breaking(self) -> bool:
+        return self == self.NON_BREAKING
+
+    @property
+    def is_forward_only(self) -> bool:
+        return self == self.FORWARD_ONLY
+
+    @property
+    def is_indirect_breaking(self) -> bool:
+        return self == self.INDIRECT_BREAKING
+
+    @property
+    def is_indirect_forward_only(self) -> bool:
+        return self == self.INDIRECT_FORWARD_ONLY
+
+    @property
+    def user_facing_value(self) -> str:
+        return self.name.capitalize().replace("_", "-")
 
 
 class SnapshotFingerprint(PydanticModel, frozen=True):
@@ -929,6 +955,22 @@ def merge_intervals(intervals: Intervals) -> Intervals:
             merged.append(interval)
 
     return merged
+
+
+def format_and_merge_intervals(intervals: Intervals, unit: t.Optional[IntervalUnit]) -> str:
+    merged_inclusive_intervals = [
+        make_inclusive(start, end) for start, end in merge_intervals(intervals)
+    ]
+    return ", ".join(
+        f"({_format_date_time(start, unit)}, {_format_date_time(end, unit)})"
+        for start, end in merged_inclusive_intervals
+    )
+
+
+def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
+    if unit is None or unit == IntervalUnit.DAY:
+        return to_ds(time_like)
+    return to_datetime(time_like).isoformat()[:19]
 
 
 def remove_interval(intervals: Intervals, remove_start: int, remove_end: int) -> Intervals:

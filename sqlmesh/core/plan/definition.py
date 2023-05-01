@@ -15,6 +15,7 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotId,
     categorize_change,
+    format_and_merge_intervals,
     merge_intervals,
 )
 from sqlmesh.core.state_sync import StateReader
@@ -22,12 +23,9 @@ from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
-    make_inclusive,
     make_inclusive_end,
     now,
     to_date,
-    to_datetime,
-    to_ds,
     to_timestamp,
     validate_date_range,
     yesterday_ds,
@@ -406,7 +404,7 @@ class Plan:
             self._restatements.update(downstream)
 
     def _build_directly_and_indirectly_modified(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
-        """Builds collections of directly and inderectly modified snapshots.
+        """Builds collections of directly and indirectly modified snapshots.
 
         Returns:
             The tuple in which the first element contains a list of added and directly modified
@@ -572,14 +570,4 @@ class MissingIntervals(PydanticModel, frozen=True):
         return merge_intervals(self.intervals)
 
     def format_missing_range(self, unit: t.Optional[IntervalUnit] = None) -> str:
-        intervals = [make_inclusive(start, end) for start, end in self.merged_intervals]
-        return ", ".join(
-            f"({_format_date_time(start, unit)}, {_format_date_time(end, unit)})"
-            for start, end in intervals
-        )
-
-
-def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
-    if unit is None or unit == IntervalUnit.DAY:
-        return to_ds(time_like)
-    return to_datetime(time_like).isoformat()[:19]
+        return format_and_merge_intervals(self.merged_intervals, unit=unit)
