@@ -54,7 +54,7 @@ Prefixes:
 
 * start - The inclusive starting interval of a model run.
 * end - The inclusive end interval of a model run.
-* latest - The most recent date SQLMesh ran the model.
+* latest - The most recent date SQLMesh ran the model, determined from its [snapshot](./architecture/snapshots.md).
 
 Postfixes:
 
@@ -92,6 +92,7 @@ All predefined macro variables:
     * @latest_millis
 
 #TODO: python date objects
+
 #TODO: epoch values
 
 ### User-defined variables
@@ -213,7 +214,7 @@ If the `@WHERE` argument were instead set to `False` the `WHERE` clause would be
 
 These operators aren't too useful if the argument's value is hard-coded. Instead, the argument can consist of code executable by Python. 
 
-For example, the `WHERE` clause will be included in this query because 1 is in fact less than 2:
+For example, the `WHERE` clause will be included in this query because 1 less than 2:
 
 ```sql linenums="1"
 MODEL (
@@ -258,6 +259,8 @@ FROM
 @WHERE(@left_number < @right_number) item_id > @size
 GROUP BY item_id
 ```
+
+The argument to `@WHERE` will be "1 < 2" as in the previous example after the macro variables `left_number` and `right_number` are substituted in.
 
 ### SQL clause operator examples
 
@@ -375,7 +378,65 @@ ORDER BY city_pop
 ```
 
 ### Functional operators
-@EACH
+
+Macro systems use control flow operators such as `for` loops and `if` statements to enable powerful dynamic SQL code. SQLMesh macros use approaches from functional programming to implement these operators, which allows them to be both powerful and concise.
+
+#### `for` loops
+Before diving in, let's dissect a `for` loop to understand its components. `for` loops have two primary parts: a collection of items and an action that should be taken for each item. For example, here is a `for` loop in Python:
+
+```python linenums="1"
+for vegetable in ['carrot', 'pea', 'bean']:
+    print(vegetable)
+```
+
+This loop prints the name of each vegetable present in the brackets:
+
+```python linenums="1"
+carrot
+pea
+bean
+```
+
+The first line of the example sets up the loop, doing two things:
+1. Telling Python to step through the list of items in brackets
+2. Telling Python that code inside the loop will refer to each item as `vegetable`
+
+The second line tells Python what action should be taken for each item. In this case, it prints the item.
+
+The loop executes one time for each item in the list, substituting in the item for the word `vegetable` in the code. For example, the first time through the loop the code would execute as `print('carrot')` and the second time as `print('pea')`.
+
+#### `@EACH`
+The SQLMesh `@EACH` operator is used to implement the equivalent of a `for` loop in SQLMesh macros. `@EACH` gets its name from the fact that a loop performs the action "for each" item in the collection. It is fundamentally equivalent to the Python loop above, but you specify the two loop components differently. 
+
+This example accomplishes a similar task to the Python example above:
+
+```sql linenums="1"
+SELECT
+    @EACH(['carrot', 'pea', 'bean'], vegetable -> vegetable)
+FROM table
+```
+The loop is set up by the first argument: `@EACH(['carrot', 'pea', 'bean']` tells SQLMesh to step through the list of items in brackets.
+
+The second argument `vegetable -> vegetable` tells SQLMesh what action should be taken for each item using an "anonymous" function (aka "lambda" function). The left side of the arrow states what name the code on the right side will refer to each item as, just like `for vegetable` in the Python example.
+
+The right side of the arrow specifies what should be done to each item in the list. `vegetable -> vegetable` tells `@EACH` that for each item "vegetable" it should return that item (e.g., "carrot").
+
+SQLMesh macros were made to build SQL code, so they take some automatic actions. If `@EACH` is used in the `SELECT` clause of a SQL statement:
+1. It prints the item
+2. It knows fields are separated by commas in `SELECT`, so it automatically separates the printed items with commas
+3. It knows that columns must be named, so it automatically appends `AS` and the value in quotes as a field name
+
+Given the automatic print and comma-separation, the anonymous function `vegetable -> vegetable` tells `@EACH` that for each item "vegetable" it should print the item, separate the items with commas, and add field names. Therefore, the output from the full example is:
+
+```sql linenums="1"
+SELECT
+    "carrot" AS "carrot", 
+    "pea" AS "pea", 
+    "bean" AS "bean"
+FROM table
+```
+
+
 @REDUCE
 @FILTER
 
