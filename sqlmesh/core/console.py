@@ -810,13 +810,13 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.added:
             self._print(f"**Added Models:**\n")
             for model in context_diff.added:
-                self._print(f"- `{model}`\n")
+                self._print(f"- {model}\n")
             self._print("\n")
 
         if context_diff.removed:
             self._print(f"**Removed Models:**\n")
             for model in context_diff.removed:
-                self._print(f"- `{model}`\n")
+                self._print(f"- {model}\n")
             self._print("\n")
 
         if context_diff.modified_snapshots:
