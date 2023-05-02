@@ -869,14 +869,13 @@ class MarkdownConsole(CaptureTerminalConsole):
 
             category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
             tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
-            syntax_dff = f"```diff{context_diff.text_diff(snapshot.name)}\n```\n"
             indirect_tree = None
             for child in plan.indirectly_modified[snapshot.name]:
                 if not indirect_tree:
                     indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
                     tree.add(indirect_tree)
                 indirect_tree.add(f"[indirect]{child}")
-            self._print(syntax_dff)
+            self._print(f"```diff\n{context_diff.text_diff(snapshot.name)}\n```\n")
             self._print("```\n")
             self._print(tree)
             self._print("\n```")

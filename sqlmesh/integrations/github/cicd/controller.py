@@ -519,13 +519,19 @@ class GithubController:
                 c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
             )
             console = MarkdownConsole()
-            console.show_model_difference_summary(plan.context_diff, detailed=True)
             console._show_categorized_snapshots(plan)
+            changes = console.captured_outputs
+            console.clear_captured_outputs()
             console._show_missing_dates(plan)
+            missing_dates = console.captured_outputs
+            console.clear_captured_outputs()
             plan_summary = f"""<details>
     <summary>Prod Plan Preview</summary>
 
-{''.join(console.captured_outputs)}
+**Changes to be applied:**
+{changes}
+
+{missing_dates}
 </details>
 
 """
