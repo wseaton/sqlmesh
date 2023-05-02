@@ -496,7 +496,6 @@ class GithubController:
                     if affected_model.intervals:
                         summary += f"    <td>{affected_model.formatted_loaded_intervals}</td>\n"
                 summary += "</table>\n"
-            console = MarkdownConsole()
             # TESTING
             plan = self._context.plan(
                 c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
@@ -505,11 +504,12 @@ class GithubController:
             console.show_model_difference_summary(plan.context_diff, detailed=True)
             console._show_missing_dates(plan)
             plan_summary = f"""<details>
-              <summary>Plan Summary</summary>
+    <summary>Plan Summary</summary>
 
-            {''.join(console.captured_outputs)}
-            </details>
-            """
+{''.join(console.captured_outputs)}
+</details>
+
+"""
             summary += plan_summary
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
