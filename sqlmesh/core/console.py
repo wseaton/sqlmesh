@@ -768,18 +768,98 @@ class CaptureTerminalConsole(TerminalConsole):
 
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         super().__init__(console=console, **kwargs)
-        self._captured_output = ""
+        self.captured_outputs: t.List[str] = []
 
-    @property
-    def captured_output(self) -> str:
-        output = self._captured_output
-        self._captured_output = ""
-        return output
+    def clear_captured_outputs(self) -> None:
+        self.captured_outputs = []
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
             self.console.print(value, **kwargs)
-        self._captured_output = capture.get()
+        self.captured_outputs.append(capture.get())
+
+
+class MarkdownConsole(CaptureTerminalConsole):
+    """
+    A console that outputs markdown. Currently this is only configured for non-interactive use so for use cases
+    where you want to display a plan in markdown.
+    """
+
+    def show_model_difference_summary(
+        self, context_diff: ContextDiff, detailed: bool = False
+    ) -> None:
+        """Shows a summary of the differences.
+
+        Args:
+            context_diff: The context diff to use to print the summary
+            detailed: Show the actual SQL differences if True.
+        """
+        if context_diff.is_new_environment:
+            self._print(
+                f"**New environment `{context_diff.environment}` will be created from `{context_diff.create_from}`**\n\n"
+            )
+            if not context_diff.has_snapshot_changes:
+                return
+
+        if not context_diff.has_changes:
+            self._print(f"**No differences when compared to `{context_diff.environment}`**\n\n")
+            return
+
+        self._print(f"**Summary of differences against `{context_diff.environment}`:**\n\n")
+
+        if context_diff.added:
+            self._print(f"**Added Models:**\n")
+            for model in context_diff.added:
+                self._print(f"* `{model}`\n")
+            self._print("\n")
+
+        if context_diff.removed:
+            self._print(f"**Removed Models:**\n")
+            for model in context_diff.removed:
+                self._print(f"* `{model}`\n")
+            self._print("\n")
+
+        if context_diff.modified_snapshots:
+            directly_modified = []
+            indirectly_modified = []
+            metadata_modified = []
+            for model in context_diff.modified_snapshots:
+                if context_diff.directly_modified(model):
+                    directly_modified.append(model)
+                elif context_diff.indirectly_modified(model):
+                    indirectly_modified.append(model)
+                elif context_diff.metadata_updated(model):
+                    metadata_modified.append(model)
+            if directly_modified:
+                self._print(f"**Directly Modified:**\n")
+                for model in directly_modified:
+                    self._print(f"* `{model}`\n")
+                    if detailed:
+                        self._print(f"```diff\n{context_diff.text_diff(model)}\n```\n")
+                self._print("\n")
+            if indirectly_modified:
+                self._print(f"**Indirectly Modified:**\n")
+                for model in indirectly_modified:
+                    self._print(f"* `{model}`\n")
+                self._print("\n")
+            if metadata_modified:
+                self._print(f"**Metadata Updated:**\n")
+                for model in metadata_modified:
+                    self._print(f"* `{model}`\n")
+                self._print("\n")
+
+    def _show_missing_dates(self, plan: Plan) -> None:
+        """Displays the models with missing dates"""
+        if not plan.missing_intervals:
+            return
+        self._print("**Models needing backfill (missing dates):**\n\n")
+        for missing in plan.missing_intervals:
+            snapshot = plan.context_diff.snapshots[missing.snapshot_name]
+            view_name = snapshot.qualified_view_name.for_environment(plan.environment_name)
+            self._print(
+                f"* `{view_name}`: {missing.format_missing_range(snapshot.model.interval_unit())}\n"
+            )
+        self._print("\n")
 
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
@@ -791,7 +871,9 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         super()._print(value, **kwargs)
-        print(self.captured_output)
+        for captured_output in self.captured_outputs:
+            print(captured_output)
+        self.clear_captured_outputs()
 
     def _prompt(self, message: str, **kwargs: t.Any) -> t.Any:
         self._print(message)

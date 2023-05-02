@@ -12,7 +12,7 @@ from enum import Enum
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, CaptureTerminalConsole
+from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, MarkdownConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
@@ -335,16 +335,13 @@ class GithubController:
         plan = self._context.plan(
             c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
         )
-        console = CaptureTerminalConsole()
+        console = MarkdownConsole()
         console.show_model_difference_summary(plan.context_diff, detailed=True)
-        model_difference_summary = console.captured_output
         console._show_missing_dates(plan)
-        missing_dates = console.captured_output
         plan_summary = f"""<details>
   <summary>Plan Summary</summary>
 
-{model_difference_summary}
-{missing_dates}
+{''.join(console.captured_outputs)}
 </details>
 
 """
@@ -499,24 +496,20 @@ class GithubController:
                     if affected_model.intervals:
                         summary += f"    <td>{affected_model.formatted_loaded_intervals}</td>\n"
                 summary += "</table>\n"
-            console = CaptureTerminalConsole()
+            console = MarkdownConsole()
             # TESTING
             plan = self._context.plan(
                 c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
             )
+            console = MarkdownConsole()
             console.show_model_difference_summary(plan.context_diff, detailed=True)
-            model_difference_summary = console.captured_output
             console._show_missing_dates(plan)
-            missing_dates = console.captured_output
             plan_summary = f"""<details>
               <summary>Plan Summary</summary>
 
-"""
-            if model_difference_summary:
-                plan_summary += model_difference_summary + "\n"
-            if missing_dates:
-                plan_summary += missing_dates + "\n"
-            plan_summary += "</details>\n"
+            {''.join(console.captured_outputs)}
+            </details>
+            """
             summary += plan_summary
             self._update_check(
                 name="SQLMesh - PR Environment Synced",

@@ -109,32 +109,3 @@ jobs:
         run: |
           sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all
 ```
-
-<table>
-    <tr>
-        <th colspan="3">PR Environment Summary</th>
-    </tr>
-    <tr>
-        <th>Model</th>
-        <th>Change Type</th>
-        <th>Dates Loaded</th>
-    </tr>
-    <tr>
-        <td>db.item_d</td>
-        <td>Breaking</td>
-        <td>(2022-06-01 - 2023-05-01)</td>
-    </tr>
-</table>
-| Model | Change Type | Dates Loaded |
-| --- | --- | --- |
-| db.item_d | Breaking | (2022-06-01 - 2023-05-01) |
-| db.order_item_f | Indirect breaking | (2022-06-01 - 2023-05-01) |
-| db.order_f | Indirect breaking | (2022-06-01 - 2023-05-01) |
-
-PR Environment Summary
-Model: db.item_d - Breaking
-Dates Loaded: (2022-06-01 - 2023-05-01)
-Model: db.order_item_f - Indirect breaking
-Dates Loaded: (2022-06-01 - 2023-05-01)
-Model: db.order_f - Indirect breaking
-Dates Loaded: (2022-06-01 - 2023-05-01)
