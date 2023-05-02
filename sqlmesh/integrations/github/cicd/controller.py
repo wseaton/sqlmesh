@@ -17,6 +17,7 @@ from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
 from sqlmesh.core.model.meta import IntervalUnit
+from sqlmesh.core.plan import Plan
 from sqlmesh.core.snapshot.definition import (
     Intervals,
     SnapshotChangeCategory,
@@ -189,6 +190,8 @@ class GithubController:
         self._config = config
         self._token = token
         self._event = event or GithubEvent.from_env()
+        self._pr_plan: t.Optional[Plan] = None
+        self._prod_plan: t.Optional[Plan] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
         self.__client: t.Optional[Github] = None
         self.__repo: t.Optional[Repository] = None
@@ -292,6 +295,30 @@ class GithubController:
             return True
         return bool(self._required_approvers_with_approval)
 
+    @property
+    def pr_plan(self) -> Plan:
+        if not self._pr_plan:
+            self._pr_plan = self._context.plan(
+                environment=self.pr_environment_name,
+                skip_backfill=True,
+                auto_apply=False,
+                no_prompts=True,
+                no_auto_categorization=True,
+            )
+        return self._pr_plan
+
+    @property
+    def prod_plan(self) -> Plan:
+        if not self._prod_plan:
+            self._prod_plan = self._context.plan(
+                c.PROD,
+                auto_apply=False,
+                no_gaps=True,
+                no_prompts=True,
+                no_auto_categorization=True,
+            )
+        return self._prod_plan
+
     def update_sqlmesh_comment_info(
         self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
     ) -> None:
@@ -320,24 +347,15 @@ class GithubController:
         Creates a PR environment from the logic present in the PR. If the PR contains changes that are
         uncategorized, then an error will be raised.
         """
-        self._context.plan(
-            environment=self.pr_environment_name,
-            skip_backfill=True,
-            auto_apply=True,
-            no_prompts=True,
-            no_auto_categorization=True,
-        )
+        self._context.apply(self.pr_plan)
 
     def deploy_to_prod(self) -> None:
         """
         Attempts to deploy a plan to prod. If the plan is not up-to-date or has gaps then it will raise.
         """
-        plan = self._context.plan(
-            c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
-        )
         console = MarkdownConsole()
-        console.show_model_difference_summary(plan.context_diff, detailed=True)
-        console._show_missing_dates(plan)
+        console.show_model_difference_summary(self.prod_plan.context_diff, detailed=True)
+        console._show_missing_dates(self.prod_plan)
         plan_summary = f"""<details>
   <summary>Plan Summary</summary>
 
@@ -349,7 +367,7 @@ class GithubController:
             value=plan_summary,
             find_regex=None,
         )
-        plan.apply()
+        self._context.apply(self.prod_plan)
 
     def delete_pr_environment(self) -> None:
         """
@@ -504,7 +522,7 @@ class GithubController:
             console.show_model_difference_summary(plan.context_diff, detailed=True)
             console._show_missing_dates(plan)
             plan_summary = f"""<details>
-    <summary>Plan Summary</summary>
+    <summary>Prod Plan Preview</summary>
 
 {''.join(console.captured_outputs)}
 </details>

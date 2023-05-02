@@ -810,13 +810,13 @@ class MarkdownConsole(CaptureTerminalConsole):
         if context_diff.added:
             self._print(f"**Added Models:**\n")
             for model in context_diff.added:
-                self._print(f"* `{model}`\n")
+                self._print(f"- `{model}`\n")
             self._print("\n")
 
         if context_diff.removed:
             self._print(f"**Removed Models:**\n")
             for model in context_diff.removed:
-                self._print(f"* `{model}`\n")
+                self._print(f"- `{model}`\n")
             self._print("\n")
 
         if context_diff.modified_snapshots:
@@ -833,19 +833,19 @@ class MarkdownConsole(CaptureTerminalConsole):
             if directly_modified:
                 self._print(f"**Directly Modified:**\n")
                 for model in directly_modified:
-                    self._print(f"* `{model}`\n")
+                    self._print(f"- `{model}`\n")
                     if detailed:
                         self._print(f"```diff\n{context_diff.text_diff(model)}\n```\n")
                 self._print("\n")
             if indirectly_modified:
                 self._print(f"**Indirectly Modified:**\n")
                 for model in indirectly_modified:
-                    self._print(f"* `{model}`\n")
+                    self._print(f"- `{model}`\n")
                 self._print("\n")
             if metadata_modified:
                 self._print(f"**Metadata Updated:**\n")
                 for model in metadata_modified:
-                    self._print(f"* `{model}`\n")
+                    self._print(f"- `{model}`\n")
                 self._print("\n")
 
     def _show_missing_dates(self, plan: Plan) -> None:
