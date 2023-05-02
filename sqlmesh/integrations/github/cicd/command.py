@@ -52,7 +52,6 @@ def check_required_approvers(ctx: click.Context) -> None:
 
 
 def _update_pr_environment(controller: GithubController) -> bool:
-    print("herere!!!")
     controller.update_pr_environment_check(status=GithubCommitStatus.IN_PROGRESS)
     try:
         controller.update_pr_environment()
@@ -106,7 +105,7 @@ def run_all(ctx: click.Context) -> None:
     controller.update_pr_environment_check(status=GithubCommitStatus.QUEUED)
     controller.update_prod_environment_check(status=GithubCommitStatus.QUEUED)
     try:
-        if not _update_pr_environment(controller):
+        if not _check_required_approvers(controller):
             controller.update_pr_environment_check(
                 status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
             )
