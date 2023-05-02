@@ -101,10 +101,13 @@ def deploy_production(ctx: click.Context) -> None:
 def run_all(ctx: click.Context) -> None:
     """Runs all the commands in the correct order."""
     controller = ctx.obj["github"]
-    controller.update_required_approval_check(status=GithubCommitStatus.QUEUED)
     controller.update_pr_environment_check(status=GithubCommitStatus.QUEUED)
     controller.update_prod_environment_check(status=GithubCommitStatus.QUEUED)
-    has_required_approval = _check_required_approvers(controller)
+    if controller.do_required_approval_check:
+        controller.update_required_approval_check(status=GithubCommitStatus.QUEUED)
+        has_required_approval = _check_required_approvers(controller)
+    else:
+        has_required_approval = True
     pr_environment_updated = _update_pr_environment(controller)
     if has_required_approval and pr_environment_updated:
         _deploy_production(controller)

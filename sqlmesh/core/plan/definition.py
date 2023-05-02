@@ -15,17 +15,19 @@ from sqlmesh.core.snapshot import (
     SnapshotChangeCategory,
     SnapshotId,
     categorize_change,
-    format_and_merge_intervals,
     merge_intervals,
 )
+from sqlmesh.core.snapshot.definition import _format_date_time
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
 from sqlmesh.utils.date import (
     TimeLike,
+    make_inclusive,
     make_inclusive_end,
     now,
     to_date,
+    to_datetime,
     to_timestamp,
     validate_date_range,
     yesterday_ds,
@@ -570,4 +572,8 @@ class MissingIntervals(PydanticModel, frozen=True):
         return merge_intervals(self.intervals)
 
     def format_missing_range(self, unit: t.Optional[IntervalUnit] = None) -> str:
-        return format_and_merge_intervals(self.merged_intervals, unit=unit)
+        intervals = [make_inclusive(start, end) for start, end in self.merged_intervals]
+        return ", ".join(
+            f"({_format_date_time(start, unit)}, {_format_date_time(end, unit)})"
+            for start, end in intervals
+        )

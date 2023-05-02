@@ -20,10 +20,12 @@ from sqlmesh.core.model.meta import IntervalUnit
 from sqlmesh.core.snapshot.definition import (
     Intervals,
     SnapshotChangeCategory,
-    format_and_merge_intervals,
+    _format_date_time,
+    merge_intervals,
 )
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.shared import PullRequestInfo
+from sqlmesh.utils.date import make_inclusive
 from sqlmesh.utils.errors import CICDBotError
 from sqlmesh.utils.pydantic import PydanticModel
 
@@ -117,7 +119,13 @@ class AffectedEnvironmentModel(PydanticModel):
 
     @property
     def formatted_loaded_intervals(self) -> str:
-        return format_and_merge_intervals(self.intervals, self.interval_unit)
+        merged_inclusive_intervals = [
+            make_inclusive(start, end) for start, end in merge_intervals(self.intervals)
+        ]
+        return ", ".join(
+            f"(`{_format_date_time(start, self.interval_unit)}` - `{_format_date_time(end, self.interval_unit)}`)"
+            for start, end in merged_inclusive_intervals
+        )
 
 
 class GithubEvent:
@@ -267,6 +275,11 @@ class GithubController:
                 ]
             )
         )
+
+    @property
+    def do_required_approval_check(self) -> bool:
+        """We want to skip required approval check if no users have this role"""
+        return bool(self._required_approvers)
 
     @property
     def has_required_approval(self) -> bool:
@@ -449,7 +462,7 @@ class GithubController:
         """
         Updates the status of the merge commit for the PR environment.
         """
-        title = f"Target Virtual Data Environment: `{self.pr_environment_name}`"
+        title = f"Target Virtual Data Environment: {self.pr_environment_name}"
         status_to_summary = {
             GithubCommitStatus.QUEUED: f":pause_button: Waiting to create or update PR Environment `{self.pr_environment_name}`",
             GithubCommitStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",

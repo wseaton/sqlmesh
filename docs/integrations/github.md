@@ -1,9 +1,117 @@
-# GitHub Actions
+# GitHub Action CI/CD Bot
 
-SQLMesh's Github Actions integration will allow you to add a SQLMesh CI/CD bot to any Github project using [Github Actions](https://github.com/features/actions). The bot will automatically run [plan/apply](../concepts/plans.md) to an [environment](../concepts/environments.md) based on the code in a pull request.
+The Github Action CI/CD allows you to automate creating PR environments, checking for required approvers, and doing data gapless deployments to production.
 
-This will be done without copying or rebuilding data using SQLMesh's [Virtual Data Environments](../concepts/glossary.md#virtual-environments).
-Once approved, the CI/CD bot will automatically run [plan/apply](../concepts/plans.md) to the production environment and merge the PR upon completion.
-This allows you to always have your main branch and prod environments in sync.
+## Getting Started
+1. Make sure SQLMesh is added to your project's dependencies.
+2. Create a new file in `.github/workflows/sqlmesh.yml` with the following contents:
+```yaml
+name: SQLMesh Bot
+run-name: 🚀SQLMesh Bot 🚀
+on:
+  pull_request:
+    types:
+    - synchronize
+    - opened
+    - closed
+  pull_request_review:
+    types:
+    - edited
+    - submitted
+    - dismissed
+jobs:
+  sqlmesh:
+    name: SQLMesh
+    runs-on: ubuntu-latest
+    permissions:
+      # Required to access code in PR
+      contents: write
+      # Required to post comments
+      issues: write
+      # Required to update check runs
+      checks: write
+      # Required to merge
+      pull-requests: write
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+      - name: Install SQLMesh + Dependencies
+        run: pip install -r requirements.txt
+        shell: bash
+      - name: Run CI/CD Bot
+        run: |
+          sqlmesh_cicd -p ${{ github.workspace }} github --token ${{ secrets.GITHUB_TOKEN }} run-all
+```
+3. (Optional) If you want to designate users as required approvers, update your SQLMesh config file to represent this. YAML Example:
+```yaml
+users:
+  - username: <A username to use within SQLMesh to represent the user>
+    github_username: <Github username>
+    roles:
+      - required_approver
+```
+4. :tada: You're done! SQLMesh will now automatically create PR environments, check for required approvers (if configured), and do data gapless deployments to production.
 
-We will be launching this CI/CD bot soon &mdash; in the meantime, please leave any feedback or questions in [our Slack channel](https://tobikodata.com/slack)!
+## Environment Summaries
+
+### Example Full Workflow
+This workflow involves configuring a SQLMesh connection to Databricks, configuring access to GCP to talk to Cloud Composer (Airflow), and caching pip installs
+```yaml
+name: SQLMesh Bot
+run-name: 🚀SQLMesh Bot 🚀
+on:
+  pull_request:
+    types:
+    - synchronize
+    - opened
+    - closed
+  pull_request_review:
+    types:
+    - edited
+    - submitted
+    - dismissed
+jobs:
+  sqlmesh:
+    name: SQLMesh
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+      # Required to post comments
+      issues: write
+      # Required to update check runs
+      checks: write
+      # Required to merge
+      pull-requests: write
+    env:
+      SQLMESH__CONNECTIONS__DATABRICKS__TYPE: "databricks"
+      SQLMESH__CONNECTIONS__DATABRICKS__SERVER_HOSTNAME: "XXXXXXXXXXXXXXX"
+      SQLMESH__CONNECTIONS__DATABRICKS__HTTP_PATH: "XXXXXXXXXXXX"
+      SQLMESH__CONNECTIONS__DATABRICKS__ACCESS_TOKEN: ${{ secrets.DATABRICKS_TOKEN }}
+      SQLMESH__DEFAULT_CONNECTION: "databricks"
+    steps:
+      - name: Setup Python
+        uses: actions/setup-python@v4
+        with:
+          python-version: '3.9'
+      - name: Checkout PR branch
+        uses: actions/checkout@v3
+      - uses: 'actions/cache@v3'
+        id: pip-cache
+        with:
+          path: ${{ env.pythonLocation }}/lib/python3.9/site-packages/*
+          key: pip-${{ hashFiles('requirements.txt') }}
+      - name: Install Dependencies
+        if: steps.pip-cache.outputs.cache-hit != 'true'
+        run: pip install -r requirements.txt
+        shell: bash
+      - id: auth
+        name: Authenticate to Google Cloud
+        uses: google-github-actions/auth@v1
+        with:
+          credentials_json: '${{ secrets.GOOGLE_CREDENTIALS }}'
+      - name: Run CI/CD Bot
+        run: |
+          sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all
+```
