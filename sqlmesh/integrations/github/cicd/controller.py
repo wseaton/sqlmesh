@@ -359,7 +359,7 @@ class GithubController:
         plan_summary = f"""<details>
   <summary>Plan Summary</summary>
 
-{''.join(console.captured_outputs)}
+{console.consume_captured_output()}
 </details>
 
 """
@@ -520,11 +520,9 @@ class GithubController:
             )
             console = MarkdownConsole()
             console._show_categorized_snapshots(plan)
-            changes = console.captured_outputs
-            console.clear_captured_outputs()
+            changes = console.consume_captured_output()
             console._show_missing_dates(plan)
-            missing_dates = console.captured_outputs
-            console.clear_captured_outputs()
+            missing_dates = console.consume_captured_output()
             plan_summary = f"""<details>
     <summary>Prod Plan Preview</summary>
 

@@ -768,15 +768,24 @@ class CaptureTerminalConsole(TerminalConsole):
 
     def __init__(self, console: t.Optional[RichConsole] = None, **kwargs: t.Any) -> None:
         super().__init__(console=console, **kwargs)
-        self.captured_outputs: t.List[str] = []
+        self._captured_outputs: t.List[str] = []
+
+    @property
+    def captured_output(self) -> str:
+        return "".join(self._captured_outputs)
+
+    def consume_captured_output(self) -> str:
+        output = self.captured_output
+        self.clear_captured_outputs()
+        return output
 
     def clear_captured_outputs(self) -> None:
-        self.captured_outputs = []
+        self._captured_outputs = []
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         with self.console.capture() as capture:
             self.console.print(value, **kwargs)
-        self.captured_outputs.append(capture.get())
+        self._captured_outputs.append(capture.get())
 
 
 class MarkdownConsole(CaptureTerminalConsole):
@@ -890,7 +899,7 @@ class DatabricksMagicConsole(CaptureTerminalConsole):
 
     def _print(self, value: t.Any, **kwargs: t.Any) -> None:
         super()._print(value, **kwargs)
-        for captured_output in self.captured_outputs:
+        for captured_output in self._captured_outputs:
             print(captured_output)
         self.clear_captured_outputs()
 
