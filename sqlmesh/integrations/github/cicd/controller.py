@@ -12,7 +12,7 @@ from enum import Enum
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
-from sqlmesh.core.console import CaptureTerminalConsole
+from sqlmesh.core.console import SNAPSHOT_CHANGE_CATEGORY_STR, CaptureTerminalConsole
 from sqlmesh.core.context import Context
 from sqlmesh.core.environment import Environment
 from sqlmesh.core.model import parse_model_name
@@ -468,7 +468,7 @@ class GithubController:
         if conclusion.is_success:
             summary = f"**PR Environment Summary**\n"
             for affected_model in self.get_pr_affected_models():
-                summary += f"Model: `{affected_model.model_name}` - `{affected_model.change_category.user_facing_value}`\n"
+                summary += f"Model: `{affected_model.model_name}` - `{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}`\n"
                 if affected_model.intervals:
                     summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
             self._update_check(

@@ -75,10 +75,6 @@ class SnapshotChangeCategory(IntEnum):
     def is_indirect_forward_only(self) -> bool:
         return self == self.INDIRECT_FORWARD_ONLY
 
-    @property
-    def user_facing_value(self) -> str:
-        return self.name.capitalize().replace("_", "-")
-
 
 class SnapshotFingerprint(PydanticModel, frozen=True):
     data_hash: str
