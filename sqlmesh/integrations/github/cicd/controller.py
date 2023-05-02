@@ -511,11 +511,12 @@ class GithubController:
             plan_summary = f"""<details>
               <summary>Plan Summary</summary>
 
-            {model_difference_summary}
-            {missing_dates}
-            </details>
-
-            """
+"""
+            if model_difference_summary:
+                plan_summary += model_difference_summary + "\n"
+            if missing_dates:
+                plan_summary += missing_dates + "\n"
+            plan_summary += "</details>\n"
             summary += plan_summary
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
