@@ -861,6 +861,26 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
         self._print("\n")
 
+    def _show_categorized_snapshots(self, plan: Plan) -> None:
+        context_diff = plan.context_diff
+        for snapshot in plan.categorized:
+            if not context_diff.directly_modified(snapshot.name):
+                continue
+
+            category_str = SNAPSHOT_CHANGE_CATEGORY_STR[snapshot.change_category]
+            tree = Tree(f"[bold][direct]Directly Modified: {snapshot.name} ({category_str})")
+            syntax_dff = f"```diff{context_diff.text_diff(snapshot.name)}\n```\n"
+            indirect_tree = None
+            for child in plan.indirectly_modified[snapshot.name]:
+                if not indirect_tree:
+                    indirect_tree = Tree(f"[indirect]Indirectly Modified Children:")
+                    tree.add(indirect_tree)
+                indirect_tree.add(f"[indirect]{child}")
+            self._print(syntax_dff)
+            self._print("```\n")
+            self._print(tree)
+            self._print("\n```")
+
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
     """

@@ -520,6 +520,7 @@ class GithubController:
             )
             console = MarkdownConsole()
             console.show_model_difference_summary(plan.context_diff, detailed=True)
+            console._show_categorized_snapshots(plan)
             console._show_missing_dates(plan)
             plan_summary = f"""<details>
     <summary>Prod Plan Preview</summary>
