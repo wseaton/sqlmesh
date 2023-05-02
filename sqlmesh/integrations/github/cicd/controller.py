@@ -123,7 +123,7 @@ class AffectedEnvironmentModel(PydanticModel):
             make_inclusive(start, end) for start, end in merge_intervals(self.intervals)
         ]
         return ", ".join(
-            f"(`{_format_date_time(start, self.interval_unit)}` - `{_format_date_time(end, self.interval_unit)}`)"
+            f"({_format_date_time(start, self.interval_unit)} - {_format_date_time(end, self.interval_unit)})"
             for start, end in merged_inclusive_intervals
         )
 
@@ -499,6 +499,24 @@ class GithubController:
                     if affected_model.intervals:
                         summary += f"    <td>{affected_model.formatted_loaded_intervals}</td>\n"
                 summary += "</table>\n"
+            console = CaptureTerminalConsole()
+            # TESTING
+            plan = self._context.plan(
+                c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
+            )
+            console.show_model_difference_summary(plan.context_diff, detailed=True)
+            model_difference_summary = console.captured_output
+            console._show_missing_dates(plan)
+            missing_dates = console.captured_output
+            plan_summary = f"""<details>
+              <summary>Plan Summary</summary>
+
+            {model_difference_summary}
+            {missing_dates}
+            </details>
+
+            """
+            summary += plan_summary
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
                 status=status,
