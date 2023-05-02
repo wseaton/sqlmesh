@@ -104,32 +104,9 @@ def run_all(ctx: click.Context) -> None:
     controller.update_required_approval_check(status=GithubCommitStatus.QUEUED)
     controller.update_pr_environment_check(status=GithubCommitStatus.QUEUED)
     controller.update_prod_environment_check(status=GithubCommitStatus.QUEUED)
-    try:
-        if not _check_required_approvers(controller):
-            controller.update_pr_environment_check(
-                status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
-            )
-            controller.update_prod_environment_check(
-                status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
-            )
-            return
-    except Exception as e:
-        controller.update_pr_environment_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
-        )
+    if _check_required_approvers(controller) and _update_pr_environment(controller):
+        _deploy_production(controller)
+    else:
         controller.update_prod_environment_check(
             status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
         )
-        raise e
-    try:
-        if not _check_required_approvers(controller):
-            controller.update_prod_environment_check(
-                status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
-            )
-            return
-    except Exception as e:
-        controller.update_prod_environment_check(
-            status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
-        )
-        raise e
-    _deploy_production(controller)
