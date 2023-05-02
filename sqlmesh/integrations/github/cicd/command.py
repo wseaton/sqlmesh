@@ -104,7 +104,9 @@ def run_all(ctx: click.Context) -> None:
     controller.update_required_approval_check(status=GithubCommitStatus.QUEUED)
     controller.update_pr_environment_check(status=GithubCommitStatus.QUEUED)
     controller.update_prod_environment_check(status=GithubCommitStatus.QUEUED)
-    if _check_required_approvers(controller) and _update_pr_environment(controller):
+    has_required_approval = _check_required_approvers(controller)
+    pr_environment_updated = _update_pr_environment(controller)
+    if has_required_approval and pr_environment_updated:
         _deploy_production(controller)
     else:
         controller.update_prod_environment_check(
