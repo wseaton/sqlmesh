@@ -57,7 +57,7 @@ users:
 ## Environment Summaries
 
 ### Example Full Workflow
-This workflow involves configuring a SQLMesh connection to Databricks, configuring access to GCP to talk to Cloud Composer (Airflow), and caching pip installs
+This workflow involves configuring a SQLMesh connection to Databricks and configuring access to GCP to talk to Cloud Composer (Airflow)
 ```yaml
 name: SQLMesh Bot
 run-name: 🚀SQLMesh Bot 🚀
@@ -97,13 +97,7 @@ jobs:
           python-version: '3.9'
       - name: Checkout PR branch
         uses: actions/checkout@v3
-      - uses: 'actions/cache@v3'
-        id: pip-cache
-        with:
-          path: ${{ env.pythonLocation }}/lib/python3.9/site-packages/*
-          key: pip-${{ hashFiles('requirements.txt') }}
       - name: Install Dependencies
-        if: steps.pip-cache.outputs.cache-hit != 'true'
         run: pip install -r requirements.txt
         shell: bash
       - id: auth
@@ -115,3 +109,32 @@ jobs:
         run: |
           sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all
 ```
+
+<table>
+    <tr>
+        <th colspan="3">PR Environment Summary</th>
+    </tr>
+    <tr>
+        <th>Model</th>
+        <th>Change Type</th>
+        <th>Dates Loaded</th>
+    </tr>
+    <tr>
+        <td>db.item_d</td>
+        <td>Breaking</td>
+        <td>(2022-06-01 - 2023-05-01)</td>
+    </tr>
+</table>
+| Model | Change Type | Dates Loaded |
+| --- | --- | --- |
+| db.item_d | Breaking | (2022-06-01 - 2023-05-01) |
+| db.order_item_f | Indirect breaking | (2022-06-01 - 2023-05-01) |
+| db.order_f | Indirect breaking | (2022-06-01 - 2023-05-01) |
+
+PR Environment Summary
+Model: db.item_d - Breaking
+Dates Loaded: (2022-06-01 - 2023-05-01)
+Model: db.order_item_f - Indirect breaking
+Dates Loaded: (2022-06-01 - 2023-05-01)
+Model: db.order_f - Indirect breaking
+Dates Loaded: (2022-06-01 - 2023-05-01)

@@ -33,8 +33,8 @@ SNAPSHOT_CHANGE_CATEGORY_STR = {
     SnapshotChangeCategory.BREAKING: "Breaking",
     SnapshotChangeCategory.NON_BREAKING: "Non-breaking",
     SnapshotChangeCategory.FORWARD_ONLY: "Forward-only",
-    SnapshotChangeCategory.INDIRECT_BREAKING: "Indirect breaking",
-    SnapshotChangeCategory.INDIRECT_FORWARD_ONLY: "Indirect forward-only",
+    SnapshotChangeCategory.INDIRECT_BREAKING: "Indirect Breaking",
+    SnapshotChangeCategory.INDIRECT_FORWARD_ONLY: "Indirect Forward-only",
 }
 
 

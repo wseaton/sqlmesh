@@ -483,21 +483,6 @@ class GithubController:
             if not pr_affected_models:
                 summary = "No models were modified in this PR.\n"
             else:
-                # <table>
-                #     <tr>
-                #         <th colspan="3">PR Environment Summary</th>
-                #     </tr>
-                #     <tr>
-                #         <th>Model</th>
-                #         <th>Change Type</th>
-                #         <th>Dates Loaded</th>
-                #     </tr>
-                #     <tr>
-                #         <td>db.item_d</td>
-                #         <td>Breaking</td>
-                #         <td>(2022-06-01 - 2023-05-01)</td>
-                #     </tr>
-                # </table>
                 summary = "<table>\n"
                 summary += "  <tr>\n"
                 summary += '    <th colspan="3">PR Environment Summary</th>\n'
@@ -512,11 +497,8 @@ class GithubController:
                     summary += f"    <td>{affected_model.model_name}</td>\n"
                     summary += f"    <td>{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}</td>\n"
                     if affected_model.intervals:
-                        summary += f"    <td>({affected_model.formatted_loaded_intervals})</td>\n"
+                        summary += f"    <td>{affected_model.formatted_loaded_intervals}</td>\n"
                 summary += "</table>\n"
-                # summary += f"Model: `{affected_model.model_name}` - `{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}`\n"
-                # if affected_model.intervals:
-                #     summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
                 status=status,
