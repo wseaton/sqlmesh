@@ -52,6 +52,7 @@ def check_required_approvers(ctx: click.Context) -> None:
 
 
 def _update_pr_environment(controller: GithubController) -> bool:
+    print("herere!!!")
     controller.update_pr_environment_check(status=GithubCommitStatus.IN_PROGRESS)
     try:
         controller.update_pr_environment()
@@ -60,7 +61,6 @@ def _update_pr_environment(controller: GithubController) -> bool:
         )
         return True
     except PlanError:
-        # controller.post_pr_has_uncategorized_changes()
         controller.update_pr_environment_check(
             status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.ACTION_REQUIRED
         )

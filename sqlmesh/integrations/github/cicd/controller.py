@@ -136,7 +136,7 @@ class GithubEvent:
 
     @classmethod
     def from_env(cls) -> GithubEvent:
-        return cls.from_path(GithubEnvironmentConfig.EVENT_PATH)
+        return cls.from_path(os.environ["GITHUB_EVENT_PATH"])
 
     @property
     def is_review(self) -> bool:
@@ -169,23 +169,18 @@ class GithubEvent:
         return self._pull_request_info
 
 
-class GithubEnvironmentConfig:
-    EVENT_PATH = os.environ["GITHUB_EVENT_PATH"]
-    API_URL = os.environ["GITHUB_API_URL"]
-
-
 class GithubController:
     def __init__(
         self,
         paths: t.Union[str, t.Iterable[str]],
         token: str,
         config: t.Optional[t.Union[Config, str]] = None,
-        event: GithubEvent = GithubEvent.from_env(),
+        event: t.Optional[GithubEvent] = None,
     ) -> None:
         self._paths = paths
         self._config = config
         self._token = token
-        self._event = event
+        self._event = event or GithubEvent.from_env()
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
         self.__client: t.Optional[Github] = None
         self.__repo: t.Optional[Repository] = None
@@ -210,7 +205,7 @@ class GithubController:
 
         if not self.__client:
             self.__client = Github(
-                base_url=GithubEnvironmentConfig.API_URL,
+                base_url=os.environ["GITHUB_API_URL"],
                 login_or_token=self._token,
             )
         return self.__client
@@ -362,7 +357,12 @@ class GithubController:
 
     def get_pr_affected_models(self) -> t.List[AffectedEnvironmentModel]:
         plan = self._context.plan(
-            c.PROD, auto_apply=False, no_gaps=False, no_prompts=True, no_auto_categorization=True
+            c.PROD,
+            auto_apply=False,
+            no_gaps=False,
+            no_prompts=True,
+            no_auto_categorization=True,
+            skip_tests=True,
         )
         modified_snapshots = []
         for snapshot in plan.directly_modified:
@@ -467,10 +467,14 @@ class GithubController:
         assert conclusion
         if conclusion.is_success:
             summary = f"**PR Environment Summary**\n"
-            for affected_model in self.get_pr_affected_models():
-                summary += f"Model: `{affected_model.model_name}` - `{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}`\n"
-                if affected_model.intervals:
-                    summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
+            pr_affected_models = self.get_pr_affected_models()
+            if not pr_affected_models:
+                summary += "No models were modified in this PR.\n"
+            else:
+                for affected_model in pr_affected_models:
+                    summary += f"Model: `{affected_model.model_name}` - `{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}`\n"
+                    if affected_model.intervals:
+                        summary += f"Dates Loaded: {affected_model.formatted_loaded_intervals}\n"
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
                 status=status,
@@ -488,6 +492,7 @@ class GithubController:
                 GithubCommitConclusion.SKIPPED: f":next_track_button: Skipped creating or updating PR Environment `{self.pr_environment_name}` since a prior stage failed",
                 GithubCommitConclusion.FAILURE: f":x: Failed to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
                 GithubCommitConclusion.CANCELLED: f":stop_sign: Cancelled creating or updating PR Environment `{self.pr_environment_name}`",
+                GithubCommitConclusion.ACTION_REQUIRED: f":warning: Action Required to create or update PR Environment `{self.pr_environment_name}`. There are likely uncateogrized changes. Run `plan` to apply these changes.",
             }
             summary = conclusion_to_summary.get(
                 conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
