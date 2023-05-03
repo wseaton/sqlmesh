@@ -30,7 +30,7 @@ from sqlmesh.core.snapshot.definition import (
 from sqlmesh.core.user import User
 from sqlmesh.integrations.github.shared import PullRequestInfo
 from sqlmesh.utils.date import make_inclusive
-from sqlmesh.utils.errors import CICDBotError
+from sqlmesh.utils.errors import CICDBotError, PlanError
 from sqlmesh.utils.pydantic import PydanticModel
 
 if t.TYPE_CHECKING:
@@ -332,13 +332,16 @@ class GithubController:
         return self._console
 
     def _get_plan_summary(self, plan: Plan) -> str:
-        self.console._show_categorized_snapshots(plan)
-        catagorized_snapshots = self.console.consume_captured_output()
-        self.console._show_missing_dates(plan)
-        missing_dates = self.console.consume_captured_output()
-        if not catagorized_snapshots and not missing_dates:
-            return "No changes to apply."
-        return f"{catagorized_snapshots}\n{missing_dates}"
+        try:
+            self.console._show_categorized_snapshots(plan)
+            catagorized_snapshots = self.console.consume_captured_output()
+            self.console._show_missing_dates(plan)
+            missing_dates = self.console.consume_captured_output()
+            if not catagorized_snapshots and not missing_dates:
+                return "No changes to apply."
+            return f"{catagorized_snapshots}\n{missing_dates}"
+        except PlanError:
+            return "Plan failed to generate. Check for pending or unresolved changes."
 
     def run_tests(self) -> t.Tuple[unittest.result.TestResult, t.Optional[str]]:
         """
@@ -387,6 +390,9 @@ class GithubController:
         """
         Attempts to deploy a plan to prod. If the plan is not up-to-date or has gaps then it will raise.
         """
+        # If the PR is already merged then we will not deploy to prod.
+        if self._pull_request.merged:
+            raise CICDBotError("PR is already merged. Skipping deploy to prod.")
         plan_summary = f"""<details>
   <summary>Prod Plan Being Applied</summary>
 
@@ -579,12 +585,16 @@ class GithubController:
                 ]
                 body_rows: List[Element | List[Element]] = []
                 for affected_model in pr_affected_models:
+                    if affected_model.change_category.is_indirect_forward_only:
+                        continue
                     model_rows = [
                         h("td", affected_model.model_name),
                         h("td", SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]),
                     ]
                     if affected_model.intervals:
                         model_rows.append(h("td", affected_model.formatted_loaded_intervals))
+                    else:
+                        model_rows.append(h("td", "N/A"))
                     body_rows.append(model_rows)
                 table_header = h("thead", [h("tr", row) for row in header_rows])
                 table_body = h("tbody", [h("tr", row) for row in body_rows])
