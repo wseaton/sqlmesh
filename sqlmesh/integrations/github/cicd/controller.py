@@ -336,6 +336,8 @@ class GithubController:
         catagorized_snapshots = self.console.consume_captured_output()
         self.console._show_missing_dates(plan)
         missing_dates = self.console.consume_captured_output()
+        if not catagorized_snapshots and not missing_dates:
+            return "No changes to apply."
         return f"{catagorized_snapshots}\n{missing_dates}"
 
     def run_tests(self) -> t.Tuple[unittest.result.TestResult, t.Optional[str]]:
