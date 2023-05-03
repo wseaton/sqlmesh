@@ -154,9 +154,10 @@ jobs:
 ```
 
 ## Improvements
-### Better Integration with Airflow
 * Currently if you are using the Airflow scheduler and are deploying a job and the workflow gets cancelled then
 the job keeps running. Ideally we would then cancel the Airflow job as well.
 * The Airflow job could take a while and we don't need to be running the Github Action for the entire time. Ideally
 we would have Airflow tag the PR when the job is done which would trigger a follow up action to check status and 
-move to the next step if successful. 
+move to the next step if successful.
+* When using `run_all` ideally we would parallelize the tasks that can be run in parallel. One can work around this 
+though by using the individual commands and running them in parallel from within the workflow.
