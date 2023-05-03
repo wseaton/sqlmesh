@@ -111,13 +111,15 @@ class AffectedEnvironmentModel(PydanticModel):
     interval_unit: t.Optional[IntervalUnit]
 
     @classmethod
-    def from_snapshot(
-        cls, snapshot: Snapshot, use_dev_intervals: bool = False
-    ) -> AffectedEnvironmentModel:
+    def from_snapshot(cls, snapshot: Snapshot) -> AffectedEnvironmentModel:
+        assert snapshot.change_category
         return cls(
             model_name=snapshot.model.name,
             view_name=snapshot.model.view_name,
-            intervals=snapshot.dev_intervals if use_dev_intervals else snapshot.intervals,
+            intervals=snapshot.dev_intervals
+            if snapshot.change_category.is_forward_only
+            or snapshot.change_category.is_indirect_forward_only
+            else snapshot.intervals,
             change_category=snapshot.change_category,
         )
 
@@ -433,40 +435,24 @@ class GithubController:
             no_auto_categorization=True,
             skip_tests=True,
         )
-        # We only want to display indirect forward only snapshots if this is a forward only plan.
-        # Children of non-breaking changes are also categorized as indirect forward only and we don't want to display
-        # those.
         affected_env_models = []
-        indirect_forward_only = []
-        is_forward_only_plan = False
         for snapshot in plan.directly_modified:
             if not snapshot.change_category:
                 continue
-            if snapshot.is_forward_only:
-                is_forward_only_plan = True
-            if snapshot.is_indirect_forward_only:
-                print("Got an indirect forward only")
-                indirect_forward_only.append(snapshot)
-                continue
-            if snapshot.change_category.is_breaking or snapshot.change_category.is_non_breaking:
-                affected_env_models.append(AffectedEnvironmentModel.from_snapshot(snapshot))
-                for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
-                    affected_env_models.append(
-                        AffectedEnvironmentModel.from_snapshot(
-                            plan.context_diff.snapshots[downstream_indirect]
-                        )
-                    )
-            else:
+            affected_env_models.append(AffectedEnvironmentModel.from_snapshot(snapshot))
+            for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
+                downstream_snapshot = plan.context_diff.snapshots[downstream_indirect]
+                assert downstream_snapshot.change_category
+                # We only want to display indirect forward only if they are a child of a forward only change.
+                # For example we don't want to display this if it is a child of a non-breaking change
+                if (
+                    downstream_snapshot.change_category.is_indirect_forward_only
+                    and not snapshot.change_category.is_forward_only
+                ):
+                    continue
                 affected_env_models.append(
-                    AffectedEnvironmentModel.from_snapshot(snapshot, use_dev_intervals=True)
+                    AffectedEnvironmentModel.from_snapshot(downstream_snapshot)
                 )
-        if is_forward_only_plan and indirect_forward_only:
-            affected_env_models.extend(
-                [
-                    AffectedEnvironmentModel.from_snapshot(snapshot, use_dev_intervals=True)
-                    for snapshot in indirect_forward_only
-                ]
-            )
         return affected_env_models
 
     def _update_check(
