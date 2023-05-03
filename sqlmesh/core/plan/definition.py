@@ -309,7 +309,7 @@ class Plan:
             ):
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
             else:
-                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_FORWARD_ONLY)
+                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
             snapshot.indirect_versions[child] = child_snapshot.all_versions
 
             # If any other snapshot specified breaking this child, then that child

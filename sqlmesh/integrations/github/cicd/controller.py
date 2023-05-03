@@ -441,7 +441,7 @@ class GithubController:
             affected_env_models.append(AffectedEnvironmentModel.from_snapshot(snapshot))
             for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
                 downstream_snapshot = plan.context_diff.snapshots[downstream_indirect]
-                if downstream_snapshot.is_indirect_forward_only:
+                if downstream_snapshot.is_indirect_non_breaking:
                     continue
                 affected_env_models.append(
                     AffectedEnvironmentModel.from_snapshot(downstream_snapshot)
