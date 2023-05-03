@@ -903,7 +903,7 @@ class MarkdownConsole(CaptureTerminalConsole):
             )
             for test, _ in result.failures + result.errors:
                 if isinstance(test, ModelTest):
-                    self._print(f"* Failure Test: `{test.model_name}` `{test.test_name}`**\n\n")
+                    self._print(f"* Failure Test: `{test.model_name}` - `{test.test_name}`\n\n")
             self._print(f"```{output}```\n\n")
 
 

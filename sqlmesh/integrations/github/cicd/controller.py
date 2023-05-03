@@ -490,18 +490,19 @@ class GithubController:
         title = status_to_title.get(status)
         summary = title
         if not title:
-            assert conclusion
-            conclusion_to_title = {
-                GithubCommitConclusion.SUCCESS: "Tests Passed",
-                GithubCommitConclusion.FAILURE: "Tests Failed",
-            }
-            title = conclusion_to_title.get(conclusion, "Tests Failed")
-            if result:
-                print(f"Failed output: {failed_output}")
+            if not result:
+                title = summary = "Skipped Tests"
+            else:
+                if result.wasSuccessful():
+                    title = "Test Passed"
+                    conclusion = GithubCommitConclusion.SUCCESS
+                else:
+                    title = "Tests Failed"
+                    conclusion = GithubCommitConclusion.FAILURE
                 self.console.log_test_results(
                     result, failed_output or "", self._context._test_engine_adapter.dialect
                 )
-            summary = self.console.consume_captured_output()
+                summary = self.console.consume_captured_output()
         self._update_check(
             name="SQLMesh - Run Unit Tests",
             status=status,
