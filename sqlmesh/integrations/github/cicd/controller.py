@@ -329,6 +329,13 @@ class GithubController:
             self._console = MarkdownConsole()
         return self._console
 
+    def _get_plan_summary(self, plan: Plan) -> str:
+        self.console._show_categorized_snapshots(plan)
+        catagorized_snapshots = self.console.consume_captured_output()
+        self.console._show_missing_dates(plan)
+        missing_dates = self.console.consume_captured_output()
+        return f"{catagorized_snapshots}\n{missing_dates}"
+
     def run_tests(self) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
         """
         Run tests for the PR
@@ -385,9 +392,9 @@ class GithubController:
         console.show_model_difference_summary(self.prod_plan.context_diff, detailed=True)
         console._show_missing_dates(self.prod_plan)
         plan_summary = f"""<details>
-  <summary>Plan Summary</summary>
+  <summary>Prod Plan Summary</summary>
 
-{console.consume_captured_output()}
+{self._get_plan_summary(self.prod_plan)}
 </details>
 
 """
@@ -528,7 +535,9 @@ class GithubController:
                 GithubCommitConclusion.SUCCESS: f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}",
             }
             title = conclusion_to_title.get(conclusion, "Need a Required Approval")
-        summary = f":information_source: List of possible required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers])}"
+        summary = f"**List of possible required approvers:**\n"
+        for user in self._required_approvers:
+            summary += f"- `{user.github_username or user.username}`\n"
         self._update_check(
             name="SQLMesh - Has Required Approval",
             status=status,
@@ -580,23 +589,6 @@ class GithubController:
                     if affected_model.intervals:
                         summary += f"    <td>{affected_model.formatted_loaded_intervals}</td>\n"
                 summary += "</table>\n"
-            # TESTING
-            console = MarkdownConsole()
-            console._show_categorized_snapshots(self.prod_plan)
-            changes = console.consume_captured_output()
-            console._show_missing_dates(self.prod_plan)
-            missing_dates = console.consume_captured_output()
-            plan_summary = f"""<details>
-    <summary>Prod Plan Preview</summary>
-
-**Changes to be applied:**
-{changes}
-
-{missing_dates}
-</details>
-
-"""
-            summary += plan_summary
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
                 status=status,
@@ -637,23 +629,26 @@ class GithubController:
             GithubCommitStatus.IN_PROGRESS: "Deploying to Prod",
             GithubCommitStatus.QUEUED: "Waiting to see if we can deploy to prod",
         }
-        title = status_to_title.get(status)
+        title = summary = status_to_title.get(status)
         if not title:
             assert conclusion
             conclusion_to_title = {
-                GithubCommitConclusion.SUCCESS: ":ship: Deployed to Prod",
-                GithubCommitConclusion.CANCELLED: ":stop_sign: Cancelled deploying to prod",
-                GithubCommitConclusion.SKIPPED: ":next_track_button: Skipped deploying to prod since dependencies were not met",
-                GithubCommitConclusion.FAILURE: ":x: Failed to deploy to prod",
+                GithubCommitConclusion.SUCCESS: "Deployed to Prod",
+                GithubCommitConclusion.CANCELLED: "Cancelled deploying to prod",
+                GithubCommitConclusion.SKIPPED: "Skipped deploying to prod since dependencies were not met",
+                GithubCommitConclusion.FAILURE: "Failed to deploy to prod",
             }
             title = conclusion_to_title.get(
-                conclusion, f":interrobang: Got an unexpected conclusion: {conclusion.value}"
+                conclusion, f"Got an unexpected conclusion: {conclusion.value}"
             )
+            summary = "**Preview of Prod Plan**\n"
+            summary += self._get_plan_summary(self.prod_plan)
         self._update_check(
             name="SQLMesh - Prod Environment Synced",
             status=status,
             conclusion=conclusion,
             title=t.cast(str, title),
+            summary=summary,
         )
 
     def merge_pr(self) -> None:

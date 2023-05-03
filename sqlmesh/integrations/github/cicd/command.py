@@ -106,7 +106,6 @@ def _deploy_production(controller: GithubController) -> bool:
         )
         return True
     except PlanError:
-        # controller.post_pr_has_uncategorized_changes()
         controller.update_prod_environment_check(
             status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.ACTION_REQUIRED
         )
