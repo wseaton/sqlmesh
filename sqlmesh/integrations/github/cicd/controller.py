@@ -9,8 +9,9 @@ import re
 import typing as t
 import unittest
 from enum import Enum
+from typing import List
 
-from hyperscript import h
+from hyperscript import Element, h
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
@@ -566,6 +567,15 @@ class GithubController:
             if not pr_affected_models:
                 summary = "No models were modified in this PR.\n"
             else:
+                header_rows = [
+                    h("th", {"colspan": "3"}, "PR Environment Summary"),
+                    [
+                        h("th", "Model"),
+                        h("th", "Change Type"),
+                        h("th", "Dates Loaded"),
+                    ],
+                ]
+                body_rows: List[Element | List[Element]] = []
                 rows = [
                     h("th", {"colspan": "3"}, "PR Environment Summary"),
                     [
@@ -606,7 +616,9 @@ class GithubController:
                     if affected_model.intervals:
                         model_rows.append(h("td", affected_model.formatted_loaded_intervals))
                     rows.append(model_rows)
-                summary = str(h("table", [h("tr", row) for row in rows]))
+                table_header = h("thead", [h("tr", row) for row in header_rows])
+                table_body = h("tbody", [h("tr", row) for row in body_rows])
+                summary = str(h("table", [table_header, table_body]))
                 print(summary)
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
