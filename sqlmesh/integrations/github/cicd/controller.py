@@ -445,6 +445,7 @@ class GithubController:
             if snapshot.is_forward_only:
                 is_forward_only_plan = True
             if snapshot.is_indirect_forward_only:
+                print("Got an indirect forward only")
                 indirect_forward_only.append(snapshot)
                 continue
             if snapshot.change_category.is_breaking or snapshot.change_category.is_non_breaking:
