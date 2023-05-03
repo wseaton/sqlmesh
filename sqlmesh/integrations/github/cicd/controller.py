@@ -118,7 +118,6 @@ class AffectedEnvironmentModel(PydanticModel):
             view_name=snapshot.model.view_name,
             intervals=snapshot.dev_intervals
             if snapshot.change_category.is_forward_only
-            or snapshot.change_category.is_indirect_forward_only
             else snapshot.intervals,
             change_category=snapshot.change_category,
         )
@@ -442,13 +441,7 @@ class GithubController:
             affected_env_models.append(AffectedEnvironmentModel.from_snapshot(snapshot))
             for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
                 downstream_snapshot = plan.context_diff.snapshots[downstream_indirect]
-                assert downstream_snapshot.change_category
-                # We only want to display indirect forward only if they are a child of a forward only change.
-                # For example we don't want to display this if it is a child of a non-breaking change
-                if (
-                    downstream_snapshot.change_category.is_indirect_forward_only
-                    and not snapshot.change_category.is_forward_only
-                ):
+                if downstream_snapshot.is_indirect_forward_only:
                     continue
                 affected_env_models.append(
                     AffectedEnvironmentModel.from_snapshot(downstream_snapshot)
