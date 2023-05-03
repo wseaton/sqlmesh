@@ -615,7 +615,7 @@ class GithubController:
                     summary += f"    <td>{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}</td>\n"
                     if affected_model.intervals:
                         model_rows.append(h("td", affected_model.formatted_loaded_intervals))
-                    rows.append(model_rows)
+                    body_rows.append(model_rows)
                 table_header = h("thead", [h("tr", row) for row in header_rows])
                 table_body = h("tbody", [h("tr", row) for row in body_rows])
                 summary = str(h("table", [table_header, table_body]))
