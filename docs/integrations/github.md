@@ -74,6 +74,8 @@ users:
 ```
 4. You're done! SQLMesh will now automatically create PR environments, check for required approvers (if configured), and do data gapless deployments to production.
 
+Note: Even if using Airflow, the runner will still need access to your engine in order to delete the PR environment.
+
 ## Configure Custom Actions
 The example above uses the `run-all` command which will run all of the actions in a single step. You can also configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
 ```bash

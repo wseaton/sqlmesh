@@ -97,7 +97,11 @@ def update_pr_environment(ctx: click.Context) -> None:
     _update_pr_environment(ctx.obj["github"])
 
 
-def _deploy_production(controller: GithubController, merge_pr_after_deploy: bool = True) -> bool:
+def _deploy_production(
+    controller: GithubController,
+    merge_pr_after_deploy: bool = True,
+    delete_environment_after_deploy: bool = True,
+) -> bool:
     controller.update_prod_environment_check(status=GithubCommitStatus.IN_PROGRESS)
     try:
         controller.deploy_to_prod()
@@ -106,6 +110,8 @@ def _deploy_production(controller: GithubController, merge_pr_after_deploy: bool
         )
         if merge_pr_after_deploy:
             controller.merge_pr()
+        if delete_environment_after_deploy:
+            controller.delete_pr_environment()
         return True
     except PlanError:
         controller.update_prod_environment_check(
@@ -121,10 +127,18 @@ def _deploy_production(controller: GithubController, merge_pr_after_deploy: bool
     is_flag=True,
     help="Merge the PR after successfully deploying to production",
 )
+@click.option(
+    "-d",
+    "--delete",
+    is_flag=True,
+    help="Delete the PR environment after successfully deploying to production",
+)
 @click.pass_context
-def deploy_production(ctx: click.Context, merge: bool) -> None:
+def deploy_production(ctx: click.Context, merge: bool, delete: bool) -> None:
     """Deploys the production environment"""
-    _deploy_production(ctx.obj["github"], merge_pr_after_deploy=merge)
+    _deploy_production(
+        ctx.obj["github"], merge_pr_after_deploy=merge, delete_environment_after_deploy=delete
+    )
 
 
 @github.command()
@@ -143,7 +157,9 @@ def run_all(ctx: click.Context) -> None:
         has_required_approval = True
     pr_environment_updated = _update_pr_environment(controller)
     if tests_passed and has_required_approval and pr_environment_updated:
-        _deploy_production(controller, merge_pr_after_deploy=True)
+        _deploy_production(
+            controller, merge_pr_after_deploy=True, delete_environment_after_deploy=True
+        )
     else:
         controller.update_prod_environment_check(
             status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
