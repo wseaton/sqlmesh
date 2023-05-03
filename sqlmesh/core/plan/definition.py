@@ -17,6 +17,7 @@ from sqlmesh.core.snapshot import (
     categorize_change,
     merge_intervals,
 )
+from sqlmesh.core.snapshot.definition import _format_date_time
 from sqlmesh.core.state_sync import StateReader
 from sqlmesh.utils import random_id
 from sqlmesh.utils.dag import DAG
@@ -27,7 +28,6 @@ from sqlmesh.utils.date import (
     now,
     to_date,
     to_datetime,
-    to_ds,
     to_timestamp,
     validate_date_range,
     yesterday_ds,
@@ -309,7 +309,7 @@ class Plan:
             ):
                 child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_BREAKING)
             else:
-                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_FORWARD_ONLY)
+                child_snapshot.categorize_as(SnapshotChangeCategory.INDIRECT_NON_BREAKING)
             snapshot.indirect_versions[child] = child_snapshot.all_versions
 
             # If any other snapshot specified breaking this child, then that child
@@ -406,7 +406,7 @@ class Plan:
             self._restatements.update(downstream)
 
     def _build_directly_and_indirectly_modified(self) -> t.Tuple[t.List[Snapshot], SnapshotMapping]:
-        """Builds collections of directly and inderectly modified snapshots.
+        """Builds collections of directly and indirectly modified snapshots.
 
         Returns:
             The tuple in which the first element contains a list of added and directly modified
@@ -443,13 +443,15 @@ class Plan:
         for model_name, snapshot in self.context_diff.snapshots.items():
             upstream_model_names = self._dag.upstream(model_name)
 
-            if not self.forward_only:
-                self._ensure_no_paused_forward_only_upstream(model_name, upstream_model_names)
-
             if model_name in self.context_diff.modified_snapshots:
                 is_directly_modified = self.context_diff.directly_modified(model_name)
 
                 if self.is_new_snapshot(snapshot):
+                    if not self.forward_only:
+                        self._ensure_no_paused_forward_only_upstream(
+                            model_name, upstream_model_names
+                        )
+
                     if self.forward_only:
                         # In case of the forward only plan any modifications result in reuse of the
                         # previous version for non-seed models.
@@ -577,9 +579,3 @@ class MissingIntervals(PydanticModel, frozen=True):
             f"({_format_date_time(start, unit)}, {_format_date_time(end, unit)})"
             for start, end in intervals
         )
-
-
-def _format_date_time(time_like: TimeLike, unit: t.Optional[IntervalUnit]) -> str:
-    if unit is None or unit == IntervalUnit.DAY:
-        return to_ds(time_like)
-    return to_datetime(time_like).isoformat()[:19]
