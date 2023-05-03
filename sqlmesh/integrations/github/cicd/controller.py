@@ -131,6 +131,10 @@ class AffectedEnvironmentModel(PydanticModel):
             for start, end in merged_inclusive_intervals
         )
 
+    @property
+    def change_category_str(self) -> str:
+        return SNAPSHOT_CHANGE_CATEGORY_STR[self.change_category]
+
 
 class GithubEvent:
     """
@@ -429,23 +433,40 @@ class GithubController:
             no_auto_categorization=True,
             skip_tests=True,
         )
-        modified_snapshots = []
+        # We only want to display indirect forward only snapshots if this is a forward only plan.
+        # Children of non-breaking changes are also categorized as indirect forward only and we don't want to display
+        # those.
+        affected_env_models = []
+        indirect_forward_only = []
+        is_forward_only_plan = False
         for snapshot in plan.directly_modified:
             if not snapshot.change_category:
                 continue
+            if snapshot.is_forward_only:
+                is_forward_only_plan = True
+            if snapshot.is_indirect_forward_only:
+                indirect_forward_only.append(snapshot)
+                continue
             if snapshot.change_category.is_breaking or snapshot.change_category.is_non_breaking:
-                modified_snapshots.append(AffectedEnvironmentModel.from_snapshot(snapshot))
+                affected_env_models.append(AffectedEnvironmentModel.from_snapshot(snapshot))
                 for downstream_indirect in plan.indirectly_modified.get(snapshot.name, set()):
-                    modified_snapshots.append(
+                    affected_env_models.append(
                         AffectedEnvironmentModel.from_snapshot(
                             plan.context_diff.snapshots[downstream_indirect]
                         )
                     )
             else:
-                modified_snapshots.append(
+                affected_env_models.append(
                     AffectedEnvironmentModel.from_snapshot(snapshot, use_dev_intervals=True)
                 )
-        return modified_snapshots
+        if is_forward_only_plan and indirect_forward_only:
+            affected_env_models.extend(
+                [
+                    AffectedEnvironmentModel.from_snapshot(snapshot, use_dev_intervals=True)
+                    for snapshot in indirect_forward_only
+                ]
+            )
+        return affected_env_models
 
     def _update_check(
         self,
@@ -585,11 +606,9 @@ class GithubController:
                 ]
                 body_rows: List[Element | List[Element]] = []
                 for affected_model in pr_affected_models:
-                    if affected_model.change_category.is_indirect_forward_only:
-                        continue
                     model_rows = [
                         h("td", affected_model.model_name),
-                        h("td", SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]),
+                        h("td", affected_model.change_category_str),
                     ]
                     if affected_model.intervals:
                         model_rows.append(h("td", affected_model.formatted_loaded_intervals))
