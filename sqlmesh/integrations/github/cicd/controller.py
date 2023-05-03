@@ -503,7 +503,7 @@ class GithubController:
                 )
             summary = self.console.consume_captured_output()
         self._update_check(
-            name="tests",
+            name="SQLMesh - Run Unit Tests",
             status=status,
             title=title,
             conclusion=conclusion,
