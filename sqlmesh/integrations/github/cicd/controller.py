@@ -10,6 +10,7 @@ import typing as t
 import unittest
 from enum import Enum
 
+from hyperscript import h
 from sqlglot.helper import seq_get
 
 from sqlmesh.core import constants as c
@@ -349,11 +350,6 @@ class GithubController:
         test_output = test_output_io.getvalue()
         return result, test_output
 
-        # results = self._context.test()
-        # if results:
-        #     self.console.log_test_results(results)
-        # self.pr_plan.run_tests()
-
     def update_sqlmesh_comment_info(
         self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
     ) -> None:
@@ -361,7 +357,7 @@ class GithubController:
         Update the SQLMesh PR Comment for the given lookup key with the given value. If a comment does not exist then
         it creates one. It determines the comment to update by looking for a comment with the header. If the lookup key
         already exists in the comment then it will replace the value if replace_if_exists is True, otherwise it will
-        not update the comment.
+        not update the comment. If no `find_regex` is provided then it will just append the value to the comment.
         """
         comment_header = "**SQLMesh Bot Info**"
         comment = seq_get(
@@ -388,11 +384,8 @@ class GithubController:
         """
         Attempts to deploy a plan to prod. If the plan is not up-to-date or has gaps then it will raise.
         """
-        console = MarkdownConsole()
-        console.show_model_difference_summary(self.prod_plan.context_diff, detailed=True)
-        console._show_missing_dates(self.prod_plan)
         plan_summary = f"""<details>
-  <summary>Prod Plan Summary</summary>
+  <summary>Prod Plan Being Applied</summary>
 
 {self._get_plan_summary(self.prod_plan)}
 </details>
@@ -573,6 +566,26 @@ class GithubController:
             if not pr_affected_models:
                 summary = "No models were modified in this PR.\n"
             else:
+                rows = [
+                    h("th", {"style": {"colspan": "3"}}, "Model"),
+                    [
+                        h("th", "Model"),
+                        h("th", "Change Type"),
+                        h("th", "Dates Loaded"),
+                    ],
+                ]
+                # table = (
+                #     h("table", [
+                #         h("tr", [
+                #             h("th", {"style": {"colspan": "3"}}, "Model"),
+                #         ]),
+                #         h("tr", [
+                #             h("th", "Model"),
+                #             h("th", "Change Type"),
+                #             h("th", "Dates Loaded"),
+                #         ]),
+                #     ])
+                # )
                 summary = "<table>\n"
                 summary += "  <tr>\n"
                 summary += '    <th colspan="3">PR Environment Summary</th>\n'
@@ -583,12 +596,18 @@ class GithubController:
                 summary += "    <th>Dates Loaded</th>\n"
                 summary += "  </tr>\n"
                 for affected_model in pr_affected_models:
+                    model_rows = [
+                        h("td", affected_model.model_name),
+                        h("td", SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]),
+                    ]
                     summary += "  <tr>\n"
                     summary += f"    <td>{affected_model.model_name}</td>\n"
                     summary += f"    <td>{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}</td>\n"
                     if affected_model.intervals:
-                        summary += f"    <td>{affected_model.formatted_loaded_intervals}</td>\n"
-                summary += "</table>\n"
+                        model_rows.append(h("td", affected_model.formatted_loaded_intervals))
+                    rows.append(model_rows)
+                summary = str(h("table", [h("tr", row) for row in rows]))
+                print(summary)
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
                 status=status,
