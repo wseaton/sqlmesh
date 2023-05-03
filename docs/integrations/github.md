@@ -1,6 +1,22 @@
-# GitHub Action CI/CD Bot
+# GitHub Actions CI/CD Bot
 
-The Github Action CI/CD allows you to automate creating PR environments, checking for required approvers, and doing data gapless deployments to production.
+## Features
+### Automated Unit Tests with Error Summary
+![Automated Unit Tests with Error Summary](images/github_test_summary.png)
+### Automatically create PR Environments that represent the code changes in the PR
+![Environment Summary](images/github_env_summary.png)
+### Enforce that certain reviewers have approved of the PR before it can be merged
+![Required Approver](images/github_reviewers.png)
+### Preview Prod Plans before Deploying
+![Preview Prod Plans](images/github_prod_plan_preview.png)
+### Automatic deployments to production and merge
+![Deployed Plans](images/github_deployed_plans.png)
+
+### Combined these feature provide
+* The ability to preview what will be deployed to production before it is deployed
+* Gapless deployments to production by ensuring that dates loaded in dev tables match what is currently in production
+* Full transparency into what exists in PR environment and what will be deployed to production - no surprises!
+* The ability to sync your code and your data to ensure what is in your main branch is in production
 
 ## Getting Started
 1. Make sure SQLMesh is added to your project's dependencies.
@@ -19,6 +35,10 @@ on:
     - edited
     - submitted
     - dismissed
+# The latest commit is the one that will be used to create the PR environment and deploy to production
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   sqlmesh:
     name: SQLMesh Actions Workflow
@@ -52,9 +72,26 @@ users:
     roles:
       - required_approver
 ```
-4. :tada: You're done! SQLMesh will now automatically create PR environments, check for required approvers (if configured), and do data gapless deployments to production.
+4. You're done! SQLMesh will now automatically create PR environments, check for required approvers (if configured), and do data gapless deployments to production.
 
-## Environment Summaries
+## Configure Custom Actions
+The example above uses the `run-all` command which will run all of the actions in a single step. You can also configure each individual action to run as a separate step. This can allow for more complex workflows or integrating specific steps with other actions you want to trigger. Run `sqlmesh_cicd github` to see a list of commands that can be supplied and their potential options.
+```bash
+  Github Action CI/CD Bot
+
+Options:
+  -t, --token TEXT  The Github Token to be used. Pass in `${{
+                    secrets.GITHUB_TOKEN }}` if you want to use the one
+                    created by Github actions
+  --help            Show this message and exit.
+
+Commands:
+  check-required-approvers  Checks if a required approver has provided...
+  deploy-production         Deploys the production environment
+  run-all                   Runs all the commands in the correct order.
+  run-tests                 Runs the unit tests
+  update-pr-environment     Creates or updates the PR environments
+```
 
 ### Example Full Workflow
 This workflow involves configuring a SQLMesh connection to Databricks and configuring access to GCP to talk to Cloud Composer (Airflow)
@@ -72,6 +109,10 @@ on:
     - edited
     - submitted
     - dismissed
+# The latest commit is the one that will be used to create the PR environment and deploy to production
+concurrency:
+  group: ${{ github.workflow }}-${{ github.head_ref || github.ref_name }}
+  cancel-in-progress: true
 jobs:
   sqlmesh:
     name: SQLMesh Actions Workflow
@@ -109,3 +150,11 @@ jobs:
         run: |
           sqlmesh_cicd -p ${{ github.workspace }} --token ${{ secrets.GITHUB_TOKEN }} run-all
 ```
+
+## Improvements
+### Better Integration with Airflow
+* Currently if you are using the Airflow scheduler and are deploying a job and the workflow gets cancelled then
+the job keeps running. Ideally we would then cancel the Airflow job as well.
+* The Airflow job could take a while and we don't need to be running the Github Action for the entire time. Ideally
+we would have Airflow tag the PR when the job is done which would trigger a follow up action to check status and 
+move to the next step if successful. 
