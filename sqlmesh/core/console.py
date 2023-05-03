@@ -889,6 +889,64 @@ class MarkdownConsole(CaptureTerminalConsole):
             self._print(tree)
             self._print("\n```")
 
+    def log_test_results(
+        self, result: unittest.result.TestResult, output: str, target_dialect: str
+    ) -> None:
+        # import ipywidgets as widgets
+
+        divider_length = 70
+        shared_style = {
+            "font-size": "11px",
+            "font-weight": "bold",
+            "font-family": "Menlo,'DejaVu Sans Mono',consolas,'Courier New',monospace",
+        }
+        if result.wasSuccessful():
+            success_color = {"color": "#008000"}
+            header = str(h("span", {"style": shared_style}, "-" * divider_length))
+            message = str(
+                h(
+                    "span",
+                    {"style": {**shared_style, **success_color}},
+                    f"Successfully Ran {str(result.testsRun)} Tests Against {target_dialect}",
+                )
+            )
+            footer = str(h("span", {"style": shared_style}, "=" * divider_length))
+            self._print(("<br>".join([header, message, footer])))
+        else:
+            fail_color = {"color": "#db3737"}
+            fail_shared_style = {**shared_style, **fail_color}
+            header = str(h("span", {"style": fail_shared_style}, "-" * divider_length))
+            message = str(h("span", {"style": fail_shared_style}, "Test Failure Summary"))
+            num_success = str(
+                h(
+                    "span",
+                    {"style": fail_shared_style},
+                    f"Num Successful Tests: {result.testsRun - len(result.failures) - len(result.errors)}",
+                )
+            )
+            failure_tests = []
+            for test, _ in result.failures + result.errors:
+                if isinstance(test, ModelTest):
+                    failure_tests.append(
+                        str(
+                            h(
+                                "span",
+                                {"style": fail_shared_style},
+                                f"Failure Test: {test.model_name} {test.test_name}",
+                            )
+                        )
+                    )
+            failures = "<br>".join(failure_tests)
+            footer = str(h("span", {"style": fail_shared_style}, "=" * divider_length))
+            # error_output = widgets.Textarea(output, layout={"height": "300px", "width": "100%"})
+            self._print(
+                "<br>".join([header, message, footer, num_success, failures, footer, output])
+            )
+            # test_info = widgets.HTML(
+            #     "<br>".join([header, message, footer, num_success, failures, footer])
+            # )
+            # self.display(widgets.VBox(children=[test_info, error_output], layout={"width": "100%"}))
+
 
 class DatabricksMagicConsole(CaptureTerminalConsole):
     """

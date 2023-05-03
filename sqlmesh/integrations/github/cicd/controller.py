@@ -7,6 +7,7 @@ import os
 import pathlib
 import re
 import typing as t
+import unittest
 from enum import Enum
 
 from sqlglot.helper import seq_get
@@ -192,6 +193,7 @@ class GithubController:
         self._event = event or GithubEvent.from_env()
         self._pr_plan: t.Optional[Plan] = None
         self._prod_plan: t.Optional[Plan] = None
+        self._console: t.Optional[MarkdownConsole] = None
         self._check_run_mapping: t.Dict[str, CheckRun] = {}
         self.__client: t.Optional[Github] = None
         self.__repo: t.Optional[Repository] = None
@@ -304,6 +306,7 @@ class GithubController:
                 auto_apply=False,
                 no_prompts=True,
                 no_auto_categorization=True,
+                skip_tests=True,
             )
         return self._pr_plan
 
@@ -316,8 +319,33 @@ class GithubController:
                 no_gaps=True,
                 no_prompts=True,
                 no_auto_categorization=True,
+                skip_tests=True,
             )
         return self._prod_plan
+
+    @property
+    def console(self) -> MarkdownConsole:
+        if not self._console:
+            self._console = MarkdownConsole()
+        return self._console
+
+    def run_tests(self) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
+        """
+        Run tests for the PR
+        """
+        import contextlib
+        from io import StringIO
+
+        test_output_io = StringIO()
+        with contextlib.redirect_stderr(test_output_io):
+            result = self._context.test()
+        test_output = test_output_io.getvalue()
+        return result, test_output
+
+        # results = self._context.test()
+        # if results:
+        #     self.console.log_test_results(results)
+        # self.pr_plan.run_tests()
 
     def update_sqlmesh_comment_info(
         self, value: str, find_regex: t.Optional[str], replace_if_exists: bool = True
@@ -445,6 +473,43 @@ class GithubController:
         else:
             self._check_run_mapping[name] = self._repo.create_check_run(**kwargs)
 
+    def update_test_check(
+        self,
+        status: GithubCommitStatus,
+        conclusion: t.Optional[GithubCommitConclusion] = None,
+        result: t.Optional[unittest.result.TestResult] = None,
+        failed_output: t.Optional[str] = None,
+    ) -> None:
+        """
+        Updates the status of tests for code in the PR
+        """
+        status_to_title = {
+            GithubCommitStatus.IN_PROGRESS: "Running Tests",
+            GithubCommitStatus.QUEUED: "Waiting to Run Tests",
+        }
+        title = status_to_title.get(status)
+        summary = title
+        if not title:
+            assert conclusion
+            conclusion_to_title = {
+                GithubCommitConclusion.SUCCESS: "Tests Passed",
+                GithubCommitConclusion.FAILURE: "Tests Failed",
+            }
+            title = conclusion_to_title.get(conclusion, "Tests Failed")
+            if result:
+                print(f"Failed output: {failed_output}")
+                self.console.log_test_results(
+                    result, failed_output or "", self._context._test_engine_adapter.dialect
+                )
+            summary = self.console.consume_captured_output()
+        self._update_check(
+            name="tests",
+            status=status,
+            title=title,
+            conclusion=conclusion,
+            summary=summary,
+        )
+
     def update_required_approval_check(
         self, status: GithubCommitStatus, conclusion: t.Optional[GithubCommitConclusion] = None
     ) -> None:
@@ -462,7 +527,7 @@ class GithubController:
                 GithubCommitConclusion.SUCCESS: f"Obtained approval from required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers_with_approval])}",
             }
             title = conclusion_to_title.get(conclusion, "Need a Required Approval")
-        summary = f"List of possible required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers])}"
+        summary = f":information_source: List of possible required approvers: {', '.join([user.github_username or user.username for user in self._required_approvers])}"
         self._update_check(
             name="SQLMesh - Has Required Approval",
             status=status,
@@ -515,13 +580,10 @@ class GithubController:
                         summary += f"    <td>{affected_model.formatted_loaded_intervals}</td>\n"
                 summary += "</table>\n"
             # TESTING
-            plan = self._context.plan(
-                c.PROD, auto_apply=False, no_gaps=True, no_prompts=True, no_auto_categorization=True
-            )
             console = MarkdownConsole()
-            console._show_categorized_snapshots(plan)
+            console._show_categorized_snapshots(self.prod_plan)
             changes = console.consume_captured_output()
-            console._show_missing_dates(plan)
+            console._show_missing_dates(self.prod_plan)
             missing_dates = console.consume_captured_output()
             plan_summary = f"""<details>
     <summary>Prod Plan Preview</summary>

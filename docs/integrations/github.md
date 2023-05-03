@@ -21,7 +21,7 @@ on:
     - dismissed
 jobs:
   sqlmesh:
-    name: SQLMesh
+    name: SQLMesh Action Workflow
     runs-on: ubuntu-latest
     permissions:
       # Required to access code in PR
@@ -74,7 +74,7 @@ on:
     - dismissed
 jobs:
   sqlmesh:
-    name: SQLMesh
+    name: SQLMesh Action Workflow
     runs-on: ubuntu-latest
     permissions:
       contents: write
