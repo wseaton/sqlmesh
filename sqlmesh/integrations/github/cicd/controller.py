@@ -567,7 +567,7 @@ class GithubController:
                 summary = "No models were modified in this PR.\n"
             else:
                 rows = [
-                    h("th", {"style": {"colspan": "3"}}, "Model"),
+                    h("th", {"colspan": "3"}, "PR Environment Summary"),
                     [
                         h("th", "Model"),
                         h("th", "Change Type"),
