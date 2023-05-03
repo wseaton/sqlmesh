@@ -338,7 +338,7 @@ class GithubController:
         missing_dates = self.console.consume_captured_output()
         return f"{catagorized_snapshots}\n{missing_dates}"
 
-    def run_tests(self) -> t.Tuple[t.Optional[unittest.result.TestResult], t.Optional[str]]:
+    def run_tests(self) -> t.Tuple[unittest.result.TestResult, t.Optional[str]]:
         """
         Run tests for the PR
         """
@@ -546,7 +546,7 @@ class GithubController:
         """
         Updates the status of the merge commit for the PR environment.
         """
-        title = f"Target Virtual Data Environment: {self.pr_environment_name}"
+        title = f"PR Virtual Data Environment: {self.pr_environment_name}"
         status_to_summary = {
             GithubCommitStatus.QUEUED: f":pause_button: Waiting to create or update PR Environment `{self.pr_environment_name}`",
             GithubCommitStatus.IN_PROGRESS: f":rocket: Creating or Updating PR Environment `{self.pr_environment_name}`",
@@ -576,50 +576,17 @@ class GithubController:
                     ],
                 ]
                 body_rows: List[Element | List[Element]] = []
-                rows = [
-                    h("th", {"colspan": "3"}, "PR Environment Summary"),
-                    [
-                        h("th", "Model"),
-                        h("th", "Change Type"),
-                        h("th", "Dates Loaded"),
-                    ],
-                ]
-                # table = (
-                #     h("table", [
-                #         h("tr", [
-                #             h("th", {"style": {"colspan": "3"}}, "Model"),
-                #         ]),
-                #         h("tr", [
-                #             h("th", "Model"),
-                #             h("th", "Change Type"),
-                #             h("th", "Dates Loaded"),
-                #         ]),
-                #     ])
-                # )
-                summary = "<table>\n"
-                summary += "  <tr>\n"
-                summary += '    <th colspan="3">PR Environment Summary</th>\n'
-                summary += "  </tr>\n"
-                summary += "  <tr>\n"
-                summary += "    <th>Model</th>\n"
-                summary += "    <th>Change Type</th>\n"
-                summary += "    <th>Dates Loaded</th>\n"
-                summary += "  </tr>\n"
                 for affected_model in pr_affected_models:
                     model_rows = [
                         h("td", affected_model.model_name),
                         h("td", SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]),
                     ]
-                    summary += "  <tr>\n"
-                    summary += f"    <td>{affected_model.model_name}</td>\n"
-                    summary += f"    <td>{SNAPSHOT_CHANGE_CATEGORY_STR[affected_model.change_category]}</td>\n"
                     if affected_model.intervals:
                         model_rows.append(h("td", affected_model.formatted_loaded_intervals))
                     body_rows.append(model_rows)
                 table_header = h("thead", [h("tr", row) for row in header_rows])
                 table_body = h("tbody", [h("tr", row) for row in body_rows])
                 summary = str(h("table", [table_header, table_body]))
-                print(summary)
             self._update_check(
                 name="SQLMesh - PR Environment Synced",
                 status=status,
@@ -628,8 +595,8 @@ class GithubController:
                 summary=summary,
             )
             self.update_sqlmesh_comment_info(
-                value=f":eyes: PR Virtual Data Environment: `{self.pr_environment_name}`",
-                find_regex=r":eyes: PR Virtual Data Environment: `.*`",
+                value=f"- PR Virtual Data Environment: `{self.pr_environment_name}`",
+                find_regex=r"- PR Virtual Data Environment: `.*`",
                 replace_if_exists=False,
             )
         else:

@@ -60,7 +60,7 @@ def _run_tests(controller: GithubController) -> bool:
             result=result,
             failed_output=failed_output,
         )
-        return True
+        return result.wasSuccessful()
     except Exception:
         controller.update_test_check(
             status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.FAILURE
@@ -97,13 +97,15 @@ def update_pr_environment(ctx: click.Context) -> None:
     _update_pr_environment(ctx.obj["github"])
 
 
-def _deploy_production(controller: GithubController) -> bool:
+def _deploy_production(controller: GithubController, merge_pr_after_deploy: bool = True) -> bool:
     controller.update_prod_environment_check(status=GithubCommitStatus.IN_PROGRESS)
     try:
         controller.deploy_to_prod()
         controller.update_prod_environment_check(
             status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SUCCESS
         )
+        if merge_pr_after_deploy:
+            controller.merge_pr()
         return True
     except PlanError:
         controller.update_prod_environment_check(
@@ -113,10 +115,16 @@ def _deploy_production(controller: GithubController) -> bool:
 
 
 @github.command()
+@click.option(
+    "-m",
+    "--merge",
+    is_flag=True,
+    help="Merge the PR after successfully deploying to production",
+)
 @click.pass_context
-def deploy_production(ctx: click.Context) -> None:
+def deploy_production(ctx: click.Context, merge: bool) -> None:
     """Deploys the production environment"""
-    _deploy_production(ctx.obj["github"])
+    _deploy_production(ctx.obj["github"], merge_pr_after_deploy=merge)
 
 
 @github.command()
@@ -135,7 +143,7 @@ def run_all(ctx: click.Context) -> None:
         has_required_approval = True
     pr_environment_updated = _update_pr_environment(controller)
     if tests_passed and has_required_approval and pr_environment_updated:
-        _deploy_production(controller)
+        _deploy_production(controller, merge_pr_after_deploy=True)
     else:
         controller.update_prod_environment_check(
             status=GithubCommitStatus.COMPLETED, conclusion=GithubCommitConclusion.SKIPPED
