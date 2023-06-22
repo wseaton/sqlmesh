@@ -429,9 +429,13 @@ class TrinoConnectionConfig(_ConnectionConfig):
 
     user: t.Optional[str]
     password: t.Optional[str]
-    database: t.Optional[str]
+
     host: t.Optional[str]
     port: t.Optional[int]
+
+    catalog: str
+    schema_name: t.Optional[str] = Field(alias="schema")
+
     http_scheme: t.Optional[str] = "https"
     verify : t.Optional[bool] = False # TODO: update
     concurrent_tasks: int = 4
@@ -442,11 +446,11 @@ class TrinoConnectionConfig(_ConnectionConfig):
     @property
     def _connection_kwargs_keys(self) -> t.Set[str]:
         return {
-            "user",
-            "password",
-            # "database",
             "host",
             "port",
+            "user",
+            "catalog",
+            "schema",
             "http_scheme"
         }
 
@@ -460,7 +464,6 @@ class TrinoConnectionConfig(_ConnectionConfig):
 
         return {
             "auth": OAuth2Authentication() if self.password is None else BasicAuthentication(self.user, self.password),
-            "catalog": self.database,
             "verify": self.verify,
 
         }

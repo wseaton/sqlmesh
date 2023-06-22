@@ -259,8 +259,12 @@ class TrinoConfig(TargetConfig):
     password: t.Optional[str]
     port: int
     database: t.Optional[str] = None
+    schema_: str = Field(alias="schema")
+
     # TODO: wire this up properly
     method: str = "oauth"
+
+
 
     @root_validator(pre=True)
     def validate_database(
@@ -276,9 +280,10 @@ class TrinoConfig(TargetConfig):
         return TrinoConnectionConfig(
             user=self.user,
             password=self.password,
-            database=self.database,
+            catalog=self.database,
             host=self.host,
             port=self.port,
+            # schema_name=self.schema_,
         )
 
 
