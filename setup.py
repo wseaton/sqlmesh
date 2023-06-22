@@ -110,6 +110,9 @@ setup(
         "snowflake": [
             "snowflake-connector-python[pandas,secure-local-storage]",
         ],
+        "trino": [
+            "trino"
+        ],
         "web": [
             "fastapi==0.95.2",
             "watchfiles>=0.19.0",

@@ -16,6 +16,7 @@ from sqlmesh.core.config.connection import (
     PostgresConnectionConfig,
     RedshiftConnectionConfig,
     SnowflakeConnectionConfig,
+    TrinoConnectionConfig
 )
 from sqlmesh.core.model import IncrementalByTimeRangeKind, IncrementalByUniqueKeyKind
 from sqlmesh.dbt.common import DbtConfig, QuotingConfig
@@ -74,6 +75,8 @@ class TargetConfig(abc.ABC, DbtConfig):
             return SnowflakeConfig(**data)
         elif db_type == "bigquery":
             return BigQueryConfig(**data)
+        elif db_type == "trino":
+            return TrinoConfig(**data)
 
         raise ConfigError(f"{db_type} not supported.")
 
@@ -230,6 +233,56 @@ class PostgresConfig(TargetConfig):
             role=self.role,
             sslmode=self.sslmode,
         )
+
+
+
+class TrinoConfig(TargetConfig):
+    """
+    Project connection and operational configuration for the Redshift target
+
+    Args:
+        host: The Redshift host to connect to
+        user: Name of the user
+        password: User's password
+        port: The port to connect to
+        dbname: Name of the database
+        keepalives_idle: Seconds between TCP keepalive packets
+        connect_timeout: Number of seconds to wait between failed attempts
+        ra3_node: Enables cross-database sources
+        search_path: Overrides the default search path
+        sslmode: SSL Mode used to connect to the database
+    """
+
+    type: Literal["trino"] = "trino"
+    host: str
+    user: str
+    password: t.Optional[str]
+    port: int
+    database: t.Optional[str] = None
+    # TODO: wire this up properly
+    method: str = "oauth"
+
+    @root_validator(pre=True)
+    def validate_database(
+        cls, values: t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]
+    ) -> t.Dict[str, t.Union[t.Tuple[str, ...], t.Optional[str], t.Dict[str, t.Any]]]:
+        values["database"] = values.get("database") or values.get("dbname")
+        if not values["database"]:
+            raise ConfigError("Either database or dbname must be set")
+        return values
+
+
+    def to_sqlmesh(self) -> ConnectionConfig:
+        return TrinoConnectionConfig(
+            user=self.user,
+            password=self.password,
+            database=self.database,
+            host=self.host,
+            port=self.port,
+        )
+
+
+
 
 
 class RedshiftConfig(TargetConfig):

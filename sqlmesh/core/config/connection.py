@@ -417,6 +417,63 @@ class BigQueryConnectionConfig(_ConnectionConfig):
         return connect
 
 
+class TrinoConnectionConfig(_ConnectionConfig):
+    """
+    Trino Connection Configuration
+
+    Arg Source: https://github.com/trinodb/trino-python-client
+
+    Args:
+
+    """
+
+    user: t.Optional[str]
+    password: t.Optional[str]
+    database: t.Optional[str]
+    host: t.Optional[str]
+    port: t.Optional[int]
+    http_scheme: t.Optional[str] = "https"
+    verify : t.Optional[bool] = False # TODO: update
+    concurrent_tasks: int = 4
+
+    type_: Literal["trino"] = Field(alias="type", default="trino")
+
+
+    @property
+    def _connection_kwargs_keys(self) -> t.Set[str]:
+        return {
+            "user",
+            "password",
+            # "database",
+            "host",
+            "port",
+            "http_scheme"
+        }
+
+    @property
+    def _engine_adapter(self) -> t.Type[EngineAdapter]:
+        return engine_adapter.TrinoEngineAdapter
+
+    @property
+    def _static_connection_kwargs(self) -> t.Dict[str, t.Any]:
+        from trino.auth import OAuth2Authentication, BasicAuthentication
+
+        return {
+            "auth": OAuth2Authentication() if self.password is None else BasicAuthentication(self.user, self.password),
+            "catalog": self.database,
+            "verify": self.verify,
+
+        }
+
+
+    @property
+    def _connection_factory(self) -> t.Callable:
+        from trino.dbapi import connect
+
+        return connect
+
+
+
 class RedshiftConnectionConfig(_ConnectionConfig):
     """
     Redshift Connection Configuration.
@@ -608,6 +665,7 @@ ConnectionConfig = Annotated[
         RedshiftConnectionConfig,
         SnowflakeConnectionConfig,
         SparkConnectionConfig,
+        TrinoConnectionConfig
     ],
     Field(discriminator="type_"),
 ]
