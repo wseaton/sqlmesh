@@ -283,7 +283,7 @@ class TrinoConfig(TargetConfig):
             catalog=self.database,
             host=self.host,
             port=self.port,
-            # schema_name=self.schema_,
+            schema=self.schema_
         )
 
 
